@@ -7,6 +7,8 @@ import { GlossCard } from './components/GlossCard';
 import { ResultCard } from './components/ResultCard';
 import { DefinitionSheet } from './components/DefinitionSheet';
 import { ChapterView } from './components/ChapterView';
+import { SearchHistory } from './components/SearchHistory';
+import type { HistoryEntry } from './components/SearchHistory';
 import { computeDistribution } from './lib/search';
 import { dbClient } from './lib/db';
 import type { DBStatus, LexEntry } from './lib/db';
@@ -28,6 +30,21 @@ export default function App() {
   const [dbStatus, setDbStatus] = useState<DBStatus>(dbClient.status);
   const [dbMessage, setDbMessage] = useState('');
   const searchAbort = useRef<AbortController | null>(null);
+
+  // Search history — persisted to localStorage
+  const [searchHistory, setSearchHistory] = useState<HistoryEntry[]>(() => {
+    try { return JSON.parse(localStorage.getItem('bcv-history') ?? '[]'); }
+    catch { return []; }
+  });
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Scroll-to-top button
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [showTopBtn, setShowTopBtn] = useState(false);
+  const handleScroll = useCallback(() => {
+    setShowTopBtn((scrollRef.current?.scrollTop ?? 0) > 200);
+  }, []);
+  const scrollToTop = () => scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
   const [chapterView, setChapterView] = useState<{
     abbr3: string; bookName: string; chapter: number; highlightVerse: number; testament: 'OT' | 'NT';
@@ -69,6 +86,20 @@ export default function App() {
   useEffect(() => {
     if (dbStatus === 'ready') runSearch(query, source);
   }, [dbStatus, query, source, runSearch]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleForceRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await dbClient.forceRefresh();
+      runSearch(query, source);
+    } catch (e) {
+      console.error('DB refresh failed', e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing, query, source, runSearch]);
 
   // Derive the gloss card entry from the first highlighted token in the results —
   // the same token data the word-tap popup uses, no separate query needed.
@@ -126,6 +157,16 @@ export default function App() {
     setQuery(q);
     setSource(s);
     setActiveBook(null);
+    // Record in history — deduplicate (remove prior occurrence of same query+source),
+    // prepend, and cap at 30 entries.
+    setSearchHistory((prev) => {
+      const next = [
+        { query: q, source: s },
+        ...prev.filter((e) => !(e.query === q && e.source === s)),
+      ].slice(0, 30);
+      try { localStorage.setItem('bcv-history', JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
   };
 
   const isLoading = dbStatus === 'initializing' || dbStatus === 'progress';
@@ -169,6 +210,29 @@ export default function App() {
           >
             📊
           </button>
+          <button
+            onClick={handleForceRefresh}
+            disabled={refreshing}
+            title="Re-download database"
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              border: 'none',
+              borderRadius: 8,
+              padding: '5px 8px',
+              color: refreshing ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.7)',
+              fontSize: 14,
+              cursor: refreshing ? 'default' : 'pointer',
+              transition: 'color 0.2s',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            aria-label="Re-download database"
+          >
+            <span style={{ display: 'inline-block', animation: refreshing ? 'spin 1s linear infinite' : 'none' }}>
+              ↻
+            </span>
+          </button>
           <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>☀</span>
         </div>
       </div>
@@ -182,6 +246,8 @@ export default function App() {
       />
 
       <div
+        ref={scrollRef}
+        onScroll={handleScroll}
         className="no-scrollbar"
         style={{
           flex: 1,
@@ -237,6 +303,16 @@ export default function App() {
           </div>
         ) : (
           <>
+            <SearchHistory
+              history={searchHistory}
+              open={historyOpen}
+              onToggle={() => setHistoryOpen((v) => !v)}
+              onSelect={({ query: q, source: s }) => onGo(q, s)}
+              onClear={() => {
+                setSearchHistory([]);
+                try { localStorage.removeItem('bcv-history'); } catch { /* quota */ }
+              }}
+            />
             <BookNav books={books} active={activeBook} onSelect={setActiveBook} />
             <MiniChart visible={showChart} bars={distribution} totalHits={results.length} />
 
@@ -286,6 +362,36 @@ export default function App() {
 
         <div style={{ height: 20 }} />
       </div>
+
+      {/* Floating scroll-to-top button */}
+      {showTopBtn && (
+        <button
+          onClick={scrollToTop}
+          aria-label="Scroll to top"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 20,
+            zIndex: 50,
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: 'var(--navy)',
+            color: '#fff',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 18,
+            lineHeight: 1,
+            boxShadow: '0 4px 14px rgba(0,0,0,0.28)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            animation: 'fadeIn 0.2s ease',
+          }}
+        >
+          ↑
+        </button>
+      )}
 
       {selectedWord && selectedLang && (
         <DefinitionSheet

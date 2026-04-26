@@ -86,6 +86,12 @@ class DBClient {
     return this.call({ type: 'fetch_chapter_originals', abbr3, chapter, testament });
   }
 
+  /** Clear the OPFS cache and re-download the DB from the server. */
+  forceRefresh(): Promise<void> {
+    this.setStatus('progress', 'Clearing cache…');
+    return this.call({ type: 'force_refresh' });
+  }
+
 }
 
 export interface ChapterVerse {

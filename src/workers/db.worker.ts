@@ -114,7 +114,8 @@ async function writeOpfsCache(data: Uint8Array): Promise<void> {
 
 /**
  * Returns DB bytes, pulling from OPFS cache when available.
- * Falls back to a network fetch and then caches the result for next time.
+ * Trusts the cache as long as it passes the size and magic-byte checks.
+ * Use the force_refresh message to manually bust the cache.
  */
 async function getDbBytes(): Promise<Uint8Array> {
   const cached = await readOpfsCache();
@@ -126,8 +127,16 @@ async function getDbBytes(): Promise<Uint8Array> {
   return data;
 }
 
-async function openDb(sqlite3: any): Promise<any> {
-  const data = await getDbBytes();
+/** Wipe the OPFS cached file so the next getDbBytes() re-fetches from network. */
+async function clearOpfsCache(): Promise<void> {
+  try {
+    const root = await navigator.storage.getDirectory();
+    await root.removeEntry(DB_NAME);
+  } catch { /* already absent — fine */ }
+}
+
+async function openDb(sqlite3: any, preloaded?: Uint8Array): Promise<any> {
+  const data = preloaded ?? await getDbBytes();
   post({ type: 'progress', message: 'Initializing…' });
 
   const p = sqlite3.wasm.allocFromTypedArray(data);
@@ -268,15 +277,22 @@ function ftsEscape(q: string): string {
 
 const CORPUS_LANG: Record<string, 'Heb' | 'Grk'> = { WLC: 'Heb', GNT: 'Grk', LXX: 'Grk' };
 
+/** Strip diacritics (nikkud, Greek accents, etc.) for accent-insensitive comparison.
+ *  Mirrors the Python ETL's _strip_diacritics() — NFD decompose then drop Mn category. */
+function stripDiacritics(s: string): string {
+  return s.normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase();
+}
+
 function makeToken(row: any[], qLow: string, corpus: string) {
+  const qNorm = stripDiacritics(qLow);
   const gloss = row[9]?.toLowerCase() ?? '';
-  const translit = row[8]?.toLowerCase() ?? '';
-  const surface = row[7]?.toLowerCase() ?? '';
+  const surfaceNorm = stripDiacritics(row[7] ?? '');
+  const translitNorm = stripDiacritics(row[8] ?? '');
   return {
     surface: row[7] ?? '', translit: row[8] ?? '', gloss: row[9] ?? '',
     root: row[10] ?? null, strong: row[11] ?? null, lemma: row[10] ?? null,
     form: row[12] ?? null, corpus: corpus as 'WLC' | 'GNT' | 'LXX',
-    highlight: gloss.includes(qLow) || translit.includes(qLow) || surface.includes(qLow),
+    highlight: gloss.includes(qLow) || translitNorm.includes(qNorm) || surfaceNorm.includes(qNorm),
   };
 }
 
@@ -427,6 +443,25 @@ self.addEventListener('message', (e: MessageEvent) => {
       post({ id: msg.id, ok: true, data: execFetchChapter(msg.abbr3, msg.chapter, msg.translation) });
     } else if (msg.type === 'fetch_chapter_originals') {
       post({ id: msg.id, ok: true, data: execFetchChapterOriginals(msg.abbr3, msg.chapter, msg.testament) });
+    } else if (msg.type === 'force_refresh') {
+      // Async: clear cache, re-download, re-open DB, then reply.
+      (async () => {
+        try {
+          post({ type: 'progress', message: 'Clearing cache…' });
+          await clearOpfsCache();
+          const sqlite3 = await (sqlite3InitModule as any)({ printErr: console.error });
+          const data = await fetchWithProgress();
+          post({ type: 'progress', message: 'Saving to cache…' });
+          await writeOpfsCache(data);
+          db = await openDb(sqlite3, data);
+          post({ id: msg.id, ok: true, data: null });
+          post({ type: 'ready' });
+        } catch (err) {
+          post({ id: msg.id, ok: false, error: String(err) });
+          post({ type: 'error', message: String(err) });
+        }
+      })();
+      return; // don't fall through to the sync reply below
     } else {
       post({ id: msg.id, ok: false, error: `Unknown type: ${msg.type}` });
     }
