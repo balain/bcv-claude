@@ -19,6 +19,8 @@ const SOURCES: { id: Source; group: 'eng' | 'orig' }[] = [
   { id: 'GNT', group: 'orig' },
 ];
 
+const isPhrase = (q: string) => q.length >= 2 && q.startsWith('"') && q.endsWith('"');
+
 export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
   const [draft, setDraft] = useState(query);
   const [localSource, setLocalSource] = useState<Source>(source);
@@ -199,6 +201,27 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
           );
         })}
       </div>
+
+      {isPhrase(draft) && (
+        <div style={{ marginTop: 4, marginBottom: 2 }}>
+          <span
+            style={{
+              display: 'inline-block',
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'DM Sans',
+              color: 'var(--indigo)',
+              background: 'var(--indigo-bg)',
+              border: '1px solid var(--indigo)',
+              borderRadius: 20,
+              padding: '1px 8px',
+              letterSpacing: '0.02em',
+            }}
+          >
+            phrase
+          </span>
+        </div>
+      )}
 
       <button
         onClick={onToggle}

@@ -6,6 +6,7 @@ interface Props {
   result: BibleResult;
   onWordTap: (word: WordToken, lang: Lang) => void;
   onEngWordClick: (word: string) => void;
+  onRefClick: (result: BibleResult) => void;
 }
 
 /** Strip leading/trailing punctuation to get a clean search term. */
@@ -19,7 +20,7 @@ const SECTION_LABEL: Record<string, string> = {
   GNT: 'Greek (GNT)',
 };
 
-export function ResultCard({ result, onWordTap, onEngWordClick }: Props) {
+export function ResultCard({ result, onWordTap, onEngWordClick, onRefClick }: Props) {
   const [expanded, setExpanded] = useState(true);
   // Start collapsed for English sources — the interlinear is supplementary there.
   const isOrigLang = result.source === 'Heb' || result.source === 'LXX' || result.source === 'GNT';
@@ -29,7 +30,7 @@ export function ResultCard({ result, onWordTap, onEngWordClick }: Props) {
   const hasLXX = result.originals.some((s) => s.corpus === 'LXX');
   const hasBoth = hasWLC && hasLXX;
 
-  const badgeText  = hasBoth ? 'Heb/LXX' : result.lang === 'Heb' ? 'Heb' : 'Grk';
+  const badgeText  = hasBoth ? 'Heb/LXX' : hasLXX && !hasWLC ? 'LXX' : result.lang === 'Heb' ? 'Heb' : 'Grk';
   const badgeColor = result.lang === 'Heb' ? 'var(--amber)' : 'var(--indigo)';
   const accentColor = badgeColor;
 
@@ -77,7 +78,7 @@ export function ResultCard({ result, onWordTap, onEngWordClick }: Props) {
       )}
       <div style={{
         display: 'flex', flexWrap: 'wrap' as const,
-        flexDirection: (section.lang === 'Heb' ? 'row-reverse' : 'row') as const,
+        flexDirection: (section.lang === 'Heb' ? 'row-reverse' : 'row') as 'row-reverse' | 'row',
         gap: 0,
       }}>
         {section.tokens.map((w, i) => (
@@ -112,10 +113,14 @@ export function ResultCard({ result, onWordTap, onEngWordClick }: Props) {
 
         <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{
-              fontSize: 13, fontWeight: 600, color: accentColor,
-              fontFamily: 'DM Sans', letterSpacing: '-0.01em',
-            }}>
+            <span
+              onClick={(e) => { e.stopPropagation(); onRefClick(result); }}
+              style={{
+                fontSize: 13, fontWeight: 600, color: accentColor,
+                fontFamily: 'DM Sans', letterSpacing: '-0.01em',
+                cursor: 'pointer',
+              }}
+            >
               {result.ref}
             </span>
             <span style={{

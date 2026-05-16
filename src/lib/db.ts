@@ -78,6 +78,43 @@ class DBClient {
     return this.call({ type: 'lookup_lemma', lemma, lang });
   }
 
+  fetchChapter(abbr3: string, chapter: number): Promise<ChapterFetchResult> {
+    return this.call({ type: 'fetch_chapter', abbr3, chapter, translation: 'NASB' });
+  }
+
+  fetchChapterOriginals(abbr3: string, chapter: number, testament: 'OT' | 'NT'): Promise<ChapterVerseOriginals[]> {
+    return this.call({ type: 'fetch_chapter_originals', abbr3, chapter, testament });
+  }
+
+  /** Clear the OPFS cache and re-download the DB from the server. */
+  forceRefresh(): Promise<void> {
+    this.setStatus('progress', 'Clearing cache…');
+    return this.call({ type: 'force_refresh' });
+  }
+
+}
+
+export interface ChapterVerse {
+  verse: number;
+  text: string;
+}
+
+export interface ChapterFetchResult {
+  verses: ChapterVerse[];
+  totalChapters: number;
+}
+
+export interface ChapterVerseOriginals {
+  verse: number;
+  originals: {
+    corpus: 'WLC' | 'LXX' | 'GNT';
+    lang: 'Heb' | 'Grk';
+    tokens: {
+      surface: string; translit: string; gloss: string;
+      root: string | null; lemma: string | null; strong: string | null;
+      form: string | null; corpus: 'WLC' | 'LXX' | 'GNT'; highlight: boolean;
+    }[];
+  }[];
 }
 
 export interface LexEntry {

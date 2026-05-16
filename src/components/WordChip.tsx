@@ -1,3 +1,4 @@
+import type React from 'react';
 import type { Lang, WordToken } from '../types';
 
 interface Props {
@@ -10,7 +11,18 @@ export function WordChip({ word, lang, onTap }: Props) {
   const isHeb = lang === 'Heb';
   const hlColor = isHeb ? 'var(--amber)' : 'var(--indigo)';
   const hlBg = isHeb ? 'var(--amber-bg)' : 'var(--indigo-bg)';
-  const hasDef = !!word.root;
+  // Chip is clickable whenever we have enough data for a useful popup
+  const hasDef = !!(word.lemma ?? word.root ?? word.strong);
+
+  const subStyle: React.CSSProperties = {
+    fontFamily: 'DM Sans',
+    textAlign: 'center',
+    lineHeight: 1.25,
+    maxWidth: 90,
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
+  };
 
   return (
     <div
@@ -27,10 +39,11 @@ export function WordChip({ word, lang, onTap }: Props) {
         cursor: hasDef ? 'pointer' : 'default',
         transition: 'background 0.15s',
         minWidth: 44,
-        maxWidth: 90,
+        maxWidth: 96,
         userSelect: 'none',
       }}
     >
+      {/* ① Original-language surface form */}
       <span
         style={{
           fontFamily: 'serif',
@@ -43,34 +56,34 @@ export function WordChip({ word, lang, onTap }: Props) {
       >
         {word.surface}
       </span>
-      <span
-        style={{
-          fontSize: 9,
-          color: 'var(--ink-light)',
-          marginTop: 1,
-          fontFamily: 'DM Sans',
-          letterSpacing: '0.01em',
-          textAlign: 'center',
-          lineHeight: 1.2,
-          maxWidth: 80,
-          overflow: 'hidden',
-          whiteSpace: 'nowrap',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        {word.gloss}
-      </span>
-      {word.root && (
+
+      {/* ② Transliteration — helps with pronunciation, kept very small */}
+      {word.translit && (
         <span
           style={{
+            ...subStyle,
             fontSize: 9,
-            color: hlColor,
+            color: 'var(--ink-light)',
+            fontStyle: 'italic',
             marginTop: 1,
-            fontFamily: 'DM Sans',
-            fontWeight: 500,
           }}
         >
-          {word.root}
+          {word.translit}
+        </span>
+      )}
+
+      {/* ③ English gloss — the main new row; slightly larger and darker so it's actually readable */}
+      {word.gloss && (
+        <span
+          style={{
+            ...subStyle,
+            fontSize: 10,
+            color: word.highlight ? hlColor : 'var(--ink-mid)',
+            fontWeight: word.highlight ? 600 : 400,
+            marginTop: 1,
+          }}
+        >
+          {word.gloss}
         </span>
       )}
     </div>
