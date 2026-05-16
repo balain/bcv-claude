@@ -11,7 +11,7 @@ import type { DB, Row } from './db.ts';
 import { uuid } from './uuid.ts';
 import { parseRefs } from './refParser.ts';
 import type {
-  Series, Session, ScriptureRef, Topic, SessionTopic, FollowUp,
+  Series, Session, ScriptureRef, Topic, FollowUp,
   FollowUpRef, FollowUpLex, Note, LexMark, SessionStatus, FollowUpStatus,
   FollowUpKind, Priority, TopicWeight, Lang, Corpus,
   SessionSummary, SessionTopicLink,

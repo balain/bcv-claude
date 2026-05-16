@@ -15,6 +15,7 @@ import { RefList } from './RefList.tsx';
 interface Props {
   sessionId: number;
   onBack: () => void;
+  onOpenRef: (bookId: number, chapter: number, verse: number) => void;
 }
 
 function downloadJson(filename: string, payload: unknown) {
@@ -36,7 +37,7 @@ function formatChip(r: ScriptureRef): string {
   return `book ${r.bookId} ${r.chapter}:${r.verseStart}-${r.verseEnd}`;
 }
 
-export function SessionView({ sessionId, onBack }: Props) {
+export function SessionView({ sessionId, onBack, onOpenRef }: Props) {
   const client = getClassClient();
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,7 +132,7 @@ export function SessionView({ sessionId, onBack }: Props) {
 
       <section className="class-refs-section">
         <h3>References ({refs.length})</h3>
-        <RefList refs={refs} onChanged={reload} />
+        <RefList refs={refs} onChanged={reload} onOpenRef={(r) => onOpenRef(r.bookId, r.chapter, r.verseStart ?? 1)} />
       </section>
 
       <footer className="class-session-footer">

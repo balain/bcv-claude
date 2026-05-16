@@ -367,7 +367,7 @@ export function ChapterView({
                       <div style={{
                         display: 'flex',
                         flexWrap: 'wrap' as const,
-                        flexDirection: (section.lang === 'Heb' ? 'row-reverse' : 'row') as const,
+                        flexDirection: (section.lang === 'Heb' ? 'row-reverse' : 'row') as 'row-reverse' | 'row',
                         gap: 0,
                       }}>
                         {section.tokens.map((w, i) => (

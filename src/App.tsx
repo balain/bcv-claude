@@ -15,6 +15,7 @@ import type { DBStatus, LexEntry } from "./lib/db";
 import type { Lang, Source, WordToken, BibleResult } from "./types";
 import { ClassMode } from "./components/class/ClassMode";
 import { initClassClient } from "./lib/class/client";
+import { BOOK_BY_ID } from "./lib/books";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -81,6 +82,15 @@ export default function App() {
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  // Called by ClassMode when a ref is tapped — opens ChapterView as an overlay
+  // without touching the hash or leaving class mode.
+  const handleClassRefOpen = useCallback((bookId: number, chapter: number, verse: number) => {
+    const book = BOOK_BY_ID.get(bookId);
+    if (book) {
+      setChapterView({ abbr3: book.abbr3, bookName: book.name, chapter, highlightVerse: verse, testament: book.testament });
+    }
   }, []);
 
   // Gloss card for original-language single-word searches.
@@ -322,7 +332,7 @@ export default function App() {
       </div>
 
       {mode === "class" ? (
-        <ClassMode />
+        <ClassMode onOpenRef={handleClassRefOpen} />
       ) : (
         <>
           <SearchBar

@@ -152,7 +152,6 @@ function applyTopic(db: DB, t: Topic, tally: Tally, fail: boolean): number | nul
         // UNIQUE conflict on `name` — different topic with same name. Try to attach
         // to the existing row instead so future imports converge.
         const existing = db.get<{ id: number }>('SELECT id FROM topics WHERE name = ?', [t.name]);
-        const msg = (e as Error).message;
         if (fail) throw e;
         tally.conflicts.push({
           table: 'topics',

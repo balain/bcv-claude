@@ -22,7 +22,11 @@ function setActiveIdInHash(id: number | null): void {
   }
 }
 
-export function ClassMode() {
+interface Props {
+  onOpenRef: (bookId: number, chapter: number, verse: number) => void;
+}
+
+export function ClassMode({ onOpenRef }: Props) {
   const [activeId, setActiveId] = useState<number | null>(readActiveIdFromHash);
 
   useEffect(() => {
@@ -46,7 +50,7 @@ export function ClassMode() {
       {activeId === null ? (
         <SessionList onOpen={openSession} />
       ) : (
-        <SessionView sessionId={activeId} onBack={closeSession} />
+        <SessionView sessionId={activeId} onBack={closeSession} onOpenRef={onOpenRef} />
       )}
     </div>
   );
