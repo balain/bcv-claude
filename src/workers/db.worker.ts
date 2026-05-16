@@ -93,8 +93,9 @@ async function readOpfsCache(): Promise<Uint8Array | null> {
 /**
  * Write DB bytes to OPFS using the Synchronous Access Handle API.
  * This API is only available in dedicated workers — ideal for our use case.
+ * Returns true if the write succeeded (so callers can mark the cache valid).
  */
-async function writeOpfsCache(data: Uint8Array): Promise<void> {
+async function writeOpfsCache(data: Uint8Array): Promise<boolean> {
   try {
     const root = await navigator.storage.getDirectory();
     const fh = await root.getFileHandle(DB_NAME, { create: true });
@@ -107,8 +108,10 @@ async function writeOpfsCache(data: Uint8Array): Promise<void> {
     } finally {
       sah.close();
     }
+    return true;
   } catch (e) {
-    console.warn('OPFS cache write failed (non-fatal):', e);
+    console.warn('OPFS cache write failed (DB will re-download on next visit):', e);
+    return false;
   }
 }
 
@@ -123,7 +126,10 @@ async function getDbBytes(): Promise<Uint8Array> {
 
   const data = await fetchWithProgress();
   post({ type: 'progress', message: 'Saving to cache…' });
-  await writeOpfsCache(data);
+  const wrote = await writeOpfsCache(data);
+  if (!wrote) {
+    post({ type: 'progress', message: 'Cache unavailable — will re-download next visit' });
+  }
   return data;
 }
 
