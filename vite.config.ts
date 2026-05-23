@@ -31,6 +31,7 @@ const COI_HEADERS = {
 };
 
 export default defineConfig({
+  base: process.env.BASE_PATH ?? '/',
   plugins: [
     react(),
     {

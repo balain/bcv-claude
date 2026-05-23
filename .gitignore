@@ -10,6 +10,8 @@ lerna-debug.log*
 .claude/
 CLAUDE.md
 
+justfile
+
 node_modules
 data
 dist

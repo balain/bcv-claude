@@ -17,7 +17,7 @@ clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST);
 
 // Inject isolation headers required for SharedArrayBuffer (used by SQLite WASM).
-const navigationHandler = createHandlerBoundToURL('/index.html');
+const navigationHandler = createHandlerBoundToURL(import.meta.env.BASE_URL + 'index.html');
 registerRoute(
   new NavigationRoute(async (params) => {
     const response = await navigationHandler(params);

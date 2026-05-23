@@ -12,6 +12,8 @@ A fast, offline-capable Bible search tool with interlinear Hebrew and Greek, bui
 - **Lemma / form search** — search from within a word-lookup card to find all occurrences of a root or inflected form
 - **GlossCard** — single-word original-language searches display the word's gloss and meaning above the result list
 - **Chapter view** — click any Book:Chapter:Verse reference to read the full NASB chapter, with prev/next chapter navigation and optional original-language interlinear per verse
+- **Search history** — quick access to your recent searches, persisted locally
+- **Class Mode** — a specialized workspace for teachers and students to manage series, sessions, scripture references, and study notes with a dedicated local database
 - **Distribution chart** — optional bar chart showing hit density across the biblical canon
 - **Book filter** — click any book pill to narrow results to a single book
 - **OPFS caching** — the ~210 MB database is downloaded once and cached in the browser's Origin Private File System; subsequent loads are instant, no network required

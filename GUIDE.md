@@ -67,10 +67,17 @@ sequence of words:
 "loving kindness"
 ```
 
-A **phrase** pill appears in the search bar to confirm the query is being
-treated as a phrase rather than independent keywords.
+- **phrase** pill appears in the search bar to confirm the query is being
+  treated as a phrase rather than independent keywords.
+
+### Search History
+
+Click the 🕒 button in the search bar to view your recent searches. Tapping any
+history entry will re-run that search immediately. History is saved locally in
+your browser's storage.
 
 ### Clicking English Words
+
 
 In any result card, click any English word to search for that word in the
 currently-selected English translation (or NASB if an original-language source
@@ -177,6 +184,45 @@ closes the chapter view and runs the search in the main list.
 
 Close the chapter view by tapping ✕ in the header or tapping the scrim behind
 the panel.
+
+---
+
+## Class Mode
+
+Class Mode is a specialized workspace for managing teaching series, sessions,
+and study notes. To enter Class Mode, click the **Class** button in the main
+navigation (or navigate to `#/class`).
+
+### Sessions and Series
+
+- **Series** — group related sessions together (e.g., a book study or a thematic
+  series).
+- **Sessions** — individual teaching events. Each session tracks the date,
+  location, and primary text.
+
+### Quick Capture
+
+Inside a session, use the **Quick Capture** field to rapidly record scripture
+references mentioned during the teaching. The app parses your input (e.g.,
+"Jn 3:16", "Gen 1:1-5") and adds it to the session's reference list.
+
+### Reference List
+
+Tapping any reference in the session list will open the **Chapter View** for
+that passage, allowing you to follow along without leaving Class Mode.
+
+### Notes and Follow-ups
+
+- **Notes** — record detailed observations or teaching points. Notes can be
+  tagged with topics or linked to specific scripture references.
+- **Follow-ups** — track questions or topics that require further study. Mark
+  them as "done" once resolved.
+
+### Data Privacy and Backups
+
+All Class Mode data is stored **locally** in your browser. It never leaves your
+device. Use the **Backup** banner to export your data as a JSON file for
+safekeeping or to move it to another device.
 
 ---
 

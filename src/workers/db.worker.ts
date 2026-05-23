@@ -39,7 +39,7 @@ function post(msg: object) { self.postMessage(msg); }
 // ─── DB loading ───────────────────────────────────────────────────────────────
 
 const DB_NAME = 'bcv.db';
-const DB_URL = '/db/bcv.db';
+const DB_URL = import.meta.env.BASE_URL + 'db/bcv.db';
 
 /** Minimum plausible DB size — rejects obviously corrupt/empty OPFS entries. */
 const CACHE_MIN_BYTES = 10_000_000; // 10 MB

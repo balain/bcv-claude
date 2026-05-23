@@ -18,26 +18,34 @@ at runtime.
 │                                                              │
 │  App.tsx ──→ SearchBar / BookNav / MiniChart / GlossCard    │
 │           ──→ ResultCard ──→ WordChip                        │
-│           ──→ DefinitionSheet                                │
+│           ──→ DefinitionSheet / SearchHistory                │
 │           ──→ ChapterView ──→ WordChip / DefinitionSheet     │
+│           ──→ ClassMode ──→ SessionList / SessionView        │
 │                                                              │
-│  lib/db.ts  (DBClient singleton)                            │
-│    .search()  .lookup()  .lookupByLemma()                   │
-│    .fetchChapter()  .fetchChapterOriginals()                 │
+│  lib/db.ts        (DBClient singleton) ──→ bcv-worker        │
+│  lib/class/db.ts  (ClassClient singleton) ──→ class-worker    │
+│                                                              │
 │       │                                                      │
 │       │  postMessage / onMessage (structured clone)          │
 │       ▼                                                      │
-├─────────────────────────────────────────────────────────────┤
-│  Web Worker (db.worker.ts)                                   │
-│                                                              │
-│  OPFS cache ──→ sqlite3_deserialize ──→ in-memory DB        │
-│  FTS5 search / point lookup / chapter fetch                  │
-└─────────────────────────────────────────────────────────────┘
+├───────────────────────────────┬──────────────────────────────┤
+│  Web Worker (db.worker.ts)    │ Web Worker (class.worker.ts) │
+│                               │                              │
+│  OPFS cache ──→ deserialize   │ IDB / OPFS ──→ class.db      │
+│  FTS5 search / chapter fetch  │ Sessions / Refs / Notes      │
+└───────────────────────────────┴──────────────────────────────┘
 
   OPFS (Origin Private File System)
-    bcv.db  ← written once on first download, read on every
-              subsequent load (skips network fetch)
+    bcv.db    ← written once on first download, read on every load
+    class.db  ← persistent user data for Class Mode
 ```
+
+### Dual-Worker Architecture
+
+The application uses two separate Web Workers to isolate heavy database operations:
+
+1.  **Bible Worker (`db.worker.ts`)**: Manages the large (~210 MB) read-only Bible database. It handles FTS5 searching, chapter fetching, and interlinear data assembly. The database is stored in OPFS for fast access.
+2.  **Class Worker (`class.worker.ts`)**: Manages the persistent user database (`class.db`). It handles CRUD operations for teaching sessions, series, and notes. This database is also stored in OPFS (via `sqlite-wasm` VFS) to ensure user data survives browser restarts.
 
 ### Key constraints
 
@@ -126,6 +134,41 @@ One row per lexicon entry.
 
 Sourced from STEPBible TBESH (Hebrew) and TBESG (Greek) TSV files.
 Approximately 22,700 entries total (11,682 Hebrew + 11,035 Greek).
+
+### Class Database (`class.db`)
+
+Managed by the Class Worker. Persistent user data.
+
+#### `series`
+Groups sessions together (e.g., "Gospel of John").
+- `external_id`: UUID for syncing.
+- `title`, `description`, `started_on`, `ended_on`.
+
+#### `sessions`
+A single teaching event.
+- `series_id`: FK to `series`.
+- `title`, `taught_on`, `location`, `primary_text`.
+- `status`: `active` or `archived`.
+
+#### `scripture_refs`
+Scripture references captured during a session.
+- `session_id`: FK to `sessions`.
+- `book_id`, `chapter`, `verse_start`, `verse_end`.
+- `raw_input`: The original text entered (e.g., "Jn 3:16").
+- `context_note`: Optional teacher note.
+
+#### `topics`
+Taxonomy for tagging sessions.
+- `name`, `parent_id`, `description`.
+
+#### `notes`
+Rich text or plain text notes tied to a session and optionally a reference.
+- `session_id`, `ref_id`, `topic_id`, `body`.
+
+#### `follow_ups`
+Tasks or questions to be addressed later.
+- `kind`: `question`, `word_study`, `cross_ref`, etc.
+- `status`: `open`, `in_progress`, `done`, `dropped`.
 
 ---
 
