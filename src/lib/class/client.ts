@@ -86,6 +86,8 @@ class ClassClient {
     update: (refId: number, patch: { contextNote?: string | null; isAnchor?: boolean }) =>
       this.call<ScriptureRef>('class_ref_update', { refId, patch }),
     delete: (refId: number) => this.call<{ ok: true }>('class_ref_delete', { refId }),
+    listByChapter: (bookId: number, chapter: number) =>
+      this.call<ScriptureRef[]>('class_ref_by_chapter', { bookId, chapter }),
   };
 
   // ---- Export / import ----

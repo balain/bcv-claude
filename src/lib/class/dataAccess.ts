@@ -346,6 +346,15 @@ export function listRefs(db: DB, sessionId: number): ScriptureRef[] {
     .map(rowToRef);
 }
 
+export function listRefsByChapter(db: DB, bookId: number, chapter: number): ScriptureRef[] {
+  return db
+    .all<Row>(
+      `SELECT * FROM v_scripture_refs WHERE book_id = ? AND chapter = ? ORDER BY verse_start, id`,
+      [bookId, chapter]
+    )
+    .map(rowToRef);
+}
+
 export function updateRef(
   db: DB,
   refId: number,

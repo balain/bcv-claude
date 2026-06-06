@@ -19,6 +19,9 @@
  */
 
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — Vite resolves this to the correct URL at both dev and build time
+import sqlite3WasmUrl from "@sqlite.org/sqlite-wasm/sqlite3.wasm?url";
 import { applySchema } from "../lib/class/schema";
 import { handleClassRequest } from "../lib/class/workerHandlers";
 import { adaptSqliteWasm } from "../lib/class/db";
@@ -66,6 +69,7 @@ self.addEventListener("message", (e: MessageEvent) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sqlite3: any = await (sqlite3InitModule as any)({
       printErr: console.error,
+      locateFile: (p: string) => p === 'sqlite3.wasm' ? sqlite3WasmUrl : p,
     });
 
     // Try SAH-pool first (most stable on iOS Safari), then OpfsDb, then memory.

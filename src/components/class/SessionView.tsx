@@ -16,6 +16,8 @@ interface Props {
   sessionId: number;
   onBack: () => void;
   onOpenRef: (bookId: number, chapter: number, verse: number) => void;
+  onBookmark?: (bookId: number, chapter: number, verse: number, label: string) => void;
+  isBookmarked?: (bookId: number, chapter: number, verse: number) => boolean;
 }
 
 function downloadJson(filename: string, payload: unknown) {
@@ -37,7 +39,7 @@ function formatChip(r: ScriptureRef): string {
   return `book ${r.bookId} ${r.chapter}:${r.verseStart}-${r.verseEnd}`;
 }
 
-export function SessionView({ sessionId, onBack, onOpenRef }: Props) {
+export function SessionView({ sessionId, onBack, onOpenRef, onBookmark, isBookmarked }: Props) {
   const client = getClassClient();
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,7 +134,13 @@ export function SessionView({ sessionId, onBack, onOpenRef }: Props) {
 
       <section className="class-refs-section">
         <h3>References ({refs.length})</h3>
-        <RefList refs={refs} onChanged={reload} onOpenRef={(r) => onOpenRef(r.bookId, r.chapter, r.verseStart ?? 1)} />
+        <RefList
+          refs={refs}
+          onChanged={reload}
+          onOpenRef={(r) => onOpenRef(r.bookId, r.chapter, r.verseStart ?? 1)}
+          onBookmark={onBookmark ? (r) => onBookmark(r.bookId, r.chapter, r.verseStart ?? 1, r.rawInput) : undefined}
+          isBookmarked={isBookmarked}
+        />
       </section>
 
       <footer className="class-session-footer">

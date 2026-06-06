@@ -186,10 +186,11 @@ export type ClassRequest =
   | RpcEnvelope<'class_series_list',   {}>
 
   // Refs
-  | RpcEnvelope<'class_ref_add',    { sessionId: number; rawInput: string; contextNote?: string; isAnchor?: boolean }>
-  | RpcEnvelope<'class_ref_list',   { sessionId: number }>
-  | RpcEnvelope<'class_ref_update', { refId: number; patch: { contextNote?: string | null; isAnchor?: boolean } }>
-  | RpcEnvelope<'class_ref_delete', { refId: number }>
+  | RpcEnvelope<'class_ref_add',          { sessionId: number; rawInput: string; contextNote?: string; isAnchor?: boolean }>
+  | RpcEnvelope<'class_ref_list',         { sessionId: number }>
+  | RpcEnvelope<'class_ref_update',       { refId: number; patch: { contextNote?: string | null; isAnchor?: boolean } }>
+  | RpcEnvelope<'class_ref_delete',       { refId: number }>
+  | RpcEnvelope<'class_ref_by_chapter',   { bookId: number; chapter: number }>
 
   // Export / import (Phase 1)
   | RpcEnvelope<'class_export_session', { sessionId: number }>

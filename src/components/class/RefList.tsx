@@ -17,6 +17,8 @@ interface Props {
   onChanged: () => void;
   /** Override the click-through navigation. Default: hash-route to ChapterView. */
   onOpenRef?: (r: ScriptureRef) => void;
+  onBookmark?: (r: ScriptureRef) => void;
+  isBookmarked?: (bookId: number, chapter: number, verse: number) => boolean;
 }
 
 function formatRef(r: ScriptureRef): string {
@@ -32,7 +34,7 @@ function defaultOpen(r: ScriptureRef) {
   window.location.hash = `#/bcv/${r.bookId}/${r.chapter}${verseQ}`;
 }
 
-export function RefList({ refs, onChanged, onOpenRef }: Props) {
+export function RefList({ refs, onChanged, onOpenRef, onBookmark, isBookmarked }: Props) {
   const client = getClassClient();
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft]     = useState('');
@@ -118,6 +120,17 @@ export function RefList({ refs, onChanged, onOpenRef }: Props) {
             </div>
           ) : (
             <div className="class-ref-controls">
+              {onBookmark && (
+                <button
+                  className="icon"
+                  onClick={() => onBookmark(r)}
+                  title={isBookmarked?.(r.bookId, r.chapter, r.verseStart ?? 1) ? 'Bookmarked' : 'Add bookmark'}
+                  aria-label={isBookmarked?.(r.bookId, r.chapter, r.verseStart ?? 1) ? 'Bookmarked' : 'Add bookmark'}
+                  style={{ color: isBookmarked?.(r.bookId, r.chapter, r.verseStart ?? 1) ? 'var(--amber)' : undefined }}
+                >
+                  {isBookmarked?.(r.bookId, r.chapter, r.verseStart ?? 1) ? '★' : '☆'}
+                </button>
+              )}
               <button
                 className="icon"
                 onClick={() => startEdit(r)}

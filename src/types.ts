@@ -34,3 +34,12 @@ export interface BibleResult {
   matchWord: string;
   originals: OriginalSection[];
 }
+
+export interface Bookmark {
+  id: string;
+  bookId: number;
+  chapter: number;
+  verse: number;
+  label: string;
+  createdAt: number;
+}
