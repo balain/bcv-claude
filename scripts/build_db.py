@@ -7,15 +7,26 @@ Usage: python3 scripts/build_db.py
 Outputs:
   data/bcv.db
   data/bcv-lsj.db
+
+Cross-reference data:
+  OpenBible data is downloaded automatically from https://a.openbible.info/data/cross-references.zip
+  and cached at data/cross-references.txt.  Attribution: OpenBible.info / Treasury of Scripture
+  Knowledge (public domain).
+
+  josephilipraja/bible-cross-reference-json is NOT bundled by default (GPL-2.0 license).
+  To import it locally, place the JSON files at data/josephilipraja/ and they will be picked up.
 """
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
 import sqlite3
 import sys
 import unicodedata
+import urllib.request
+import zipfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -152,6 +163,13 @@ def _aliases() -> dict[str, str]:
 
 ALIASES = _aliases()
 
+# OpenBible cross-reference data
+OPENBIBLE_URL = "https://a.openbible.info/data/cross-references.zip"
+OPENBIBLE_CACHE = DATA / "cross-references.txt"
+
+# josephilipraja dataset (optional, GPL-2.0)
+JOSEPHILIPRAJA_DIR = DATA / "josephilipraja"
+
 
 def resolve_book(raw: str) -> int | None:
     if raw is None:
@@ -225,6 +243,23 @@ CREATE TABLE lex_names (
   refs TEXT,
   PRIMARY KEY (key)
 );
+
+CREATE TABLE cross_refs (
+  id               INTEGER PRIMARY KEY,
+  source_book_id   INTEGER NOT NULL,
+  source_chapter   INTEGER NOT NULL,
+  source_verse     INTEGER NOT NULL,
+  target_book_id   INTEGER NOT NULL,
+  target_chapter   INTEGER NOT NULL,
+  target_verse_start INTEGER NOT NULL,
+  target_verse_end INTEGER,
+  votes            INTEGER,
+  source_dataset   TEXT NOT NULL,
+  UNIQUE(source_book_id, source_chapter, source_verse,
+         target_book_id, target_chapter, target_verse_start, source_dataset)
+);
+CREATE INDEX idx_cross_refs_source ON cross_refs(source_book_id, source_chapter, source_verse, votes DESC);
+CREATE INDEX idx_cross_refs_target ON cross_refs(target_book_id, target_chapter, target_verse_start);
 
 CREATE VIRTUAL TABLE verses_fts USING fts5(
   text,
@@ -651,6 +686,183 @@ def load_lsj(out: sqlite3.Connection) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Cross-reference ETL
+# ---------------------------------------------------------------------------
+
+def _download_openbible() -> bool:
+    """Download and cache OpenBible cross-reference TSV. Returns True on success."""
+    if OPENBIBLE_CACHE.exists():
+        return True
+    print("  Downloading OpenBible cross-references from openbible.info…")
+    try:
+        req = urllib.request.Request(
+            OPENBIBLE_URL,
+            headers={"User-Agent": "bcv-claude/build"},
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = resp.read()
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            names = zf.namelist()
+            txt_names = [n for n in names if n.endswith(".txt")]
+            if not txt_names:
+                print(f"  WARNING: no .txt file in OpenBible zip (found: {names})")
+                return False
+            content = zf.read(txt_names[0]).decode("utf-8")
+        OPENBIBLE_CACHE.write_text(content, encoding="utf-8")
+        print(f"  Cached OpenBible data → {OPENBIBLE_CACHE.name}")
+        return True
+    except Exception as exc:
+        print(f"  WARNING: Could not download OpenBible data: {exc}")
+        print(f"  Cross-references will be empty. To add manually:")
+        print(f"    curl -L {OPENBIBLE_URL} -o /tmp/cr.zip && unzip -p /tmp/cr.zip > {OPENBIBLE_CACHE}")
+        return False
+
+
+def _parse_osis_ref(ref: str) -> tuple[int, int, int, int | None] | None:
+    """Parse 'Gen.1.1' or 'Gen.1.1-3' → (book_id, chapter, verse_start, verse_end)."""
+    parts = ref.strip().split(".")
+    if len(parts) < 3:
+        return None
+    book_raw = parts[0]
+    try:
+        chapter = int(parts[1])
+        verse_raw = parts[2]
+        if "-" in verse_raw:
+            vs_parts = verse_raw.split("-", 1)
+            vs_digits = "".join(c for c in vs_parts[0] if c.isdigit())
+            ve_digits = "".join(c for c in vs_parts[1] if c.isdigit())
+            verse_start = int(vs_digits) if vs_digits else 0
+            verse_end: int | None = int(ve_digits) if ve_digits else None
+        else:
+            digits = "".join(c for c in verse_raw if c.isdigit())
+            verse_start = int(digits) if digits else 0
+            verse_end = None
+        book_id = resolve_book(book_raw)
+        if book_id is None or verse_start == 0:
+            return None
+        return (book_id, chapter, verse_start, verse_end)
+    except (ValueError, IndexError):
+        return None
+
+
+def load_openbible_cross_refs(out: sqlite3.Connection) -> tuple[int, int]:
+    """Load OpenBible cross-references. Returns (loaded, skipped)."""
+    if not _download_openbible():
+        return (0, 0)
+    lines = OPENBIBLE_CACHE.read_text(encoding="utf-8").splitlines()
+    batch: list[tuple] = []
+    skipped = 0
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        # Skip header row
+        if parts[0].lower() in ("from verse", "from", "from_verse"):
+            continue
+        from_ref = parts[0].strip()
+        to_ref = parts[1].strip()
+        votes: int | None = None
+        if len(parts) >= 3:
+            v_str = parts[2].strip()
+            if v_str.lstrip("-").isdigit():
+                votes = int(v_str)
+        src = _parse_osis_ref(from_ref)
+        tgt = _parse_osis_ref(to_ref)
+        if src is None or tgt is None:
+            skipped += 1
+            continue
+        src_book, src_ch, src_vs, _ = src
+        tgt_book, tgt_ch, tgt_vs_start, tgt_vs_end = tgt
+        batch.append((
+            src_book, src_ch, src_vs,
+            tgt_book, tgt_ch, tgt_vs_start, tgt_vs_end,
+            votes, "openbible",
+        ))
+    out.executemany(
+        """INSERT OR IGNORE INTO cross_refs
+           (source_book_id, source_chapter, source_verse,
+            target_book_id, target_chapter, target_verse_start, target_verse_end,
+            votes, source_dataset)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        batch,
+    )
+    return (len(batch), skipped)
+
+
+def load_josephilipraja_cross_refs(out: sqlite3.Connection) -> tuple[int, int]:
+    """Load josephilipraja/bible-cross-reference-json (GPL-2.0, optional).
+    Place JSON files under data/josephilipraja/ to enable. Not bundled by default."""
+    if not JOSEPHILIPRAJA_DIR.exists():
+        return (0, 0)
+    batch: list[tuple] = []
+    skipped = 0
+    for json_path in sorted(JOSEPHILIPRAJA_DIR.glob("*.json")):
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        for verse_key, verse_obj in data.items():
+            if not isinstance(verse_obj, dict):
+                continue
+            refs = verse_obj.get("r", {})
+            if not isinstance(refs, dict):
+                continue
+            src = _parse_osis_ref(verse_key.replace(".", "."))
+            if src is None:
+                # Try "Book Chapter:Verse" format
+                src = _parse_ref_colon(verse_key)
+            if src is None:
+                skipped += 1
+                continue
+            src_book, src_ch, src_vs, _ = src
+            for target_key in refs:
+                tgt = _parse_osis_ref(target_key)
+                if tgt is None:
+                    tgt = _parse_ref_colon(target_key)
+                if tgt is None:
+                    skipped += 1
+                    continue
+                tgt_book, tgt_ch, tgt_vs_start, tgt_vs_end = tgt
+                batch.append((
+                    src_book, src_ch, src_vs,
+                    tgt_book, tgt_ch, tgt_vs_start, tgt_vs_end,
+                    None, "josephilipraja",
+                ))
+    if batch:
+        out.executemany(
+            """INSERT OR IGNORE INTO cross_refs
+               (source_book_id, source_chapter, source_verse,
+                target_book_id, target_chapter, target_verse_start, target_verse_end,
+                votes, source_dataset)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            batch,
+        )
+    return (len(batch), skipped)
+
+
+_COLON_REF_RE = re.compile(r"^(.+?)\s+(\d+):(\d+)(?:-(\d+))?$")
+
+
+def _parse_ref_colon(ref: str) -> tuple[int, int, int, int | None] | None:
+    """Parse 'Genesis 1:1' or 'Genesis 1:1-3' format."""
+    m = _COLON_REF_RE.match(ref.strip())
+    if not m:
+        return None
+    book_id = resolve_book(m.group(1))
+    if book_id is None:
+        return None
+    ch = int(m.group(2))
+    vs = int(m.group(3))
+    ve: int | None = int(m.group(4)) if m.group(4) else None
+    return (book_id, ch, vs, ve)
+
+
+# ---------------------------------------------------------------------------
 # Build pipeline
 # ---------------------------------------------------------------------------
 def build_core() -> None:
@@ -681,6 +893,12 @@ def build_core() -> None:
     print("  gnt tokens:     ", load_tokens_gnt(conn))
     print("  lxx tokens:     ", load_tokens_lxx(conn))
 
+    conn.commit()
+    n_cr, sk_cr = load_openbible_cross_refs(conn)
+    print(f"  cross_refs (OpenBible): {n_cr} loaded, {sk_cr} skipped")
+    n_jp, sk_jp = load_josephilipraja_cross_refs(conn)
+    if n_jp:
+        print(f"  cross_refs (josephilipraja): {n_jp} loaded, {sk_jp} skipped")
     conn.commit()
     print("  rebuilding FTS…")
     conn.execute("INSERT INTO verses_fts(verses_fts) VALUES('rebuild')")

@@ -14,7 +14,7 @@ import type {
   Series, Session, ScriptureRef, Topic, FollowUp,
   FollowUpRef, FollowUpLex, Note, LexMark, SessionStatus, FollowUpStatus,
   FollowUpKind, Priority, TopicWeight, Lang, Corpus,
-  SessionSummary, SessionTopicLink,
+  SessionSummary, SessionTopicLink, UserCrossRef,
 } from './types.ts';
 
 // ----------------------------------------------------------------------------
@@ -453,6 +453,121 @@ export function listFollowUps(
       .map(rowToFollowUpLex);
     return rowToFollowUp(h, refs, lex);
   });
+}
+
+// ----------------------------------------------------------------------------
+// User cross-refs
+// ----------------------------------------------------------------------------
+
+function rowToUserCrossRef(r: Row): UserCrossRef {
+  return {
+    id: r.id as number,
+    externalId: r.external_id as string,
+    sessionId: (r.session_id as number | null) ?? null,
+    sourceBookId: r.source_book_id as number,
+    sourceChapter: r.source_chapter as number,
+    sourceVerse: r.source_verse as number,
+    targetBookId: r.target_book_id as number,
+    targetChapter: r.target_chapter as number,
+    targetVerseStart: r.target_verse_start as number,
+    targetVerseEnd: (r.target_verse_end as number | null) ?? null,
+    note: (r.note as string | null) ?? null,
+    createdFrom: r.created_from as 'search' | 'browse' | 'class',
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  };
+}
+
+export function addUserCrossRef(
+  db: DB,
+  input: {
+    sourceBookId: number;
+    sourceChapter: number;
+    sourceVerse: number;
+    targetRawInput: string;
+    sessionId?: number;
+    note?: string;
+    createdFrom: 'search' | 'browse' | 'class';
+  }
+): UserCrossRef[] {
+  const parsed = parseRefs(input.targetRawInput);
+  if (parsed.refs.length === 0) {
+    throw new Error(parsed.errors[0] ?? `could not parse "${input.targetRawInput}"`);
+  }
+  const created: UserCrossRef[] = [];
+  db.transaction(() => {
+    for (const r of parsed.refs) {
+      const externalId = uuid();
+      const result = db.run(
+        `INSERT INTO user_cross_refs
+           (external_id, session_id, source_book_id, source_chapter, source_verse,
+            target_book_id, target_chapter, target_verse_start, target_verse_end,
+            note, created_from)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          externalId,
+          input.sessionId ?? null,
+          input.sourceBookId,
+          input.sourceChapter,
+          input.sourceVerse,
+          r.bookId,
+          r.chapter,
+          r.verseStart ?? 1,
+          r.verseEnd ?? null,
+          input.note ?? null,
+          input.createdFrom,
+        ]
+      );
+      const row = db.get<Row>('SELECT * FROM user_cross_refs WHERE id = ?', [result.lastInsertRowid])!;
+      created.push(rowToUserCrossRef(row));
+    }
+  });
+  return created;
+}
+
+export function updateUserCrossRef(db: DB, id: number, patch: { note?: string | null }): UserCrossRef {
+  if ('note' in patch) {
+    db.run('UPDATE user_cross_refs SET note = ? WHERE id = ?', [patch.note ?? null, id]);
+  }
+  return rowToUserCrossRef(db.get<Row>('SELECT * FROM user_cross_refs WHERE id = ?', [id])!);
+}
+
+export function deleteUserCrossRef(db: DB, id: number): void {
+  db.run(
+    `UPDATE user_cross_refs SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
+    [id]
+  );
+}
+
+export function listUserCrossRefsBySource(
+  db: DB,
+  sourceBookId: number,
+  sourceChapter: number,
+  sourceVerse: number
+): UserCrossRef[] {
+  return db
+    .all<Row>(
+      `SELECT * FROM v_user_cross_refs
+       WHERE source_book_id = ? AND source_chapter = ? AND source_verse = ?
+       ORDER BY created_at`,
+      [sourceBookId, sourceChapter, sourceVerse]
+    )
+    .map(rowToUserCrossRef);
+}
+
+export function listUserCrossRefsByChapter(
+  db: DB,
+  sourceBookId: number,
+  sourceChapter: number
+): UserCrossRef[] {
+  return db
+    .all<Row>(
+      `SELECT * FROM v_user_cross_refs
+       WHERE source_book_id = ? AND source_chapter = ?
+       ORDER BY source_verse, created_at`,
+      [sourceBookId, sourceChapter]
+    )
+    .map(rowToUserCrossRef);
 }
 
 // ----------------------------------------------------------------------------

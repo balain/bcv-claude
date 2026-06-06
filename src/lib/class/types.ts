@@ -119,6 +119,23 @@ export interface Note {
   updatedAt: string;
 }
 
+export interface UserCrossRef {
+  id: number;
+  externalId: string;
+  sessionId: number | null;
+  sourceBookId: number;
+  sourceChapter: number;
+  sourceVerse: number;
+  targetBookId: number;
+  targetChapter: number;
+  targetVerseStart: number;
+  targetVerseEnd: number | null;
+  note: string | null;
+  createdFrom: 'search' | 'browse' | 'class';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LexMark {
   id: number;
   externalId: string;
@@ -195,6 +212,23 @@ export type ClassRequest =
   // Export / import (Phase 1)
   | RpcEnvelope<'class_export_session', { sessionId: number }>
   | RpcEnvelope<'class_import_session', { json: string; mergePolicy?: 'lww' | 'fail-on-conflict' }>
+
+  // User cross-refs
+  | RpcEnvelope<'class_cross_ref_add', {
+      sourceBookId: number; sourceChapter: number; sourceVerse: number;
+      targetRawInput: string;
+      sessionId?: number; note?: string; createdFrom: 'search' | 'browse' | 'class';
+    }>
+  | RpcEnvelope<'class_cross_ref_update', {
+      id: number; patch: { note?: string | null }
+    }>
+  | RpcEnvelope<'class_cross_ref_delete', { id: number }>
+  | RpcEnvelope<'class_cross_ref_list_by_source', {
+      sourceBookId: number; sourceChapter: number; sourceVerse: number
+    }>
+  | RpcEnvelope<'class_cross_ref_list_by_chapter', {
+      sourceBookId: number; sourceChapter: number
+    }>
 
   // Meta
   | RpcEnvelope<'class_meta_get', { key: string }>

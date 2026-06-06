@@ -15,9 +15,11 @@ import { dbClient } from "./lib/db";
 import type { DBStatus, LexEntry } from "./lib/db";
 import type { Lang, Source, WordToken, BibleResult, Bookmark } from "./types";
 import { ClassMode } from "./components/class/ClassMode";
-import { initClassClient } from "./lib/class/client";
-import { BOOK_BY_ID } from "./lib/books";
+import { initClassClient, getClassClient } from "./lib/class/client";
+import { BOOK_BY_ID, BOOK_BY_ABBR3 } from "./lib/books";
 import { loadBookmarks, saveBookmarks } from "./lib/bookmarks";
+import type { CrossRef } from "./lib/db";
+import { getCrossRefsBulk } from "./lib/crossRefs";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -38,6 +40,7 @@ export default function App() {
   const [activeBook, setActiveBook] = useState<string | null>(null);
 
   const [results, setResults] = useState<BibleResult[]>([]);
+  const [crossRefMap, setCrossRefMap] = useState<Map<string, CrossRef[]>>(new Map());
   // Seed from current singleton status so we don't miss events that fired before mount
   const [dbStatus, setDbStatus] = useState<DBStatus>(dbClient.status);
   const [dbMessage, setDbMessage] = useState("");
@@ -169,7 +172,19 @@ export default function App() {
       searchAbort.current = ctrl;
       try {
         const r = await dbClient.search(q, s);
-        if (!ctrl.signal.aborted) setResults(r);
+        if (ctrl.signal.aborted) return;
+        setResults(r);
+        // Fetch cross-refs for all results after search settles
+        const verses = r.map((res) => ({
+          bookId: BOOK_BY_ABBR3.get(res.bookAbbr)?.id ?? 0,
+          chapter: res.chapter,
+          verse: res.verse,
+        })).filter((v) => v.bookId > 0);
+        let classClient: Parameters<typeof getCrossRefsBulk>[1] = null;
+        try { classClient = getClassClient(); } catch { /* not initialized */ }
+        getCrossRefsBulk(verses, classClient).then((map) => {
+          if (!ctrl.signal.aborted) setCrossRefMap(map);
+        }).catch(() => {});
       } catch (e) {
         if (!ctrl.signal.aborted) console.error("Search error", e);
       }
@@ -281,6 +296,35 @@ export default function App() {
       return next;
     });
   };
+
+  const handleAddCrossRef = useCallback(
+    async (sourceBookId: number, sourceChapter: number, sourceVerse: number, rawTarget: string) => {
+      try {
+        const cc = getClassClient();
+        await cc.crossRef.add({
+          sourceBookId, sourceChapter, sourceVerse,
+          targetRawInput: rawTarget,
+          createdFrom: mode === 'class' ? 'class' : mode === 'browse' ? 'browse' : 'search',
+        });
+        // Refresh the cross-ref map for the affected verse
+        const key = `${sourceBookId}:${sourceChapter}:${sourceVerse}`;
+        let classClient: Parameters<typeof getCrossRefsBulk>[1] = null;
+        try { classClient = getClassClient(); } catch { /* not initialized */ }
+        getCrossRefsBulk([{ bookId: sourceBookId, chapter: sourceChapter, verse: sourceVerse }], classClient)
+          .then((map) => {
+            setCrossRefMap((prev) => {
+              const next = new Map(prev);
+              const updated = map.get(key);
+              if (updated) next.set(key, updated);
+              return next;
+            });
+          }).catch(() => {});
+      } catch (e) {
+        console.error('Failed to add cross-ref:', e);
+      }
+    },
+    [mode],
+  );
 
   const isLoading = dbStatus === "initializing" || dbStatus === "progress";
 
@@ -528,30 +572,42 @@ export default function App() {
                     No results.
                   </div>
                 ) : (
-                  filtered.map((r, i) => (
-                    <ResultCard
-                      key={`${r.ref}-${i}`}
-                      result={r}
-                      onWordTap={(w, lang) => {
-                        setSelectedWord(w);
-                        setSelectedLang(lang);
-                      }}
-                      onEngWordClick={(word) =>
-                        onGo(word, ENG_SOURCES.has(source) ? source : "NASB")
-                      }
-                      onRefClick={(r) =>
-                        setChapterView({
-                          abbr3: r.bookAbbr,
-                          bookName: r.book,
-                          chapter: r.chapter,
-                          highlightVerse: r.verse,
-                          testament: r.testament,
-                        })
-                      }
-                      onBookmark={addBookmark}
-                      isBookmarked={isBookmarked}
-                    />
-                  ))
+                  filtered.map((r, i) => {
+                    const rBookId = BOOK_BY_ABBR3.get(r.bookAbbr)?.id ?? 0;
+                    const crKey = `${rBookId}:${r.chapter}:${r.verse}`;
+                    return (
+                      <ResultCard
+                        key={`${r.ref}-${i}`}
+                        result={r}
+                        onWordTap={(w, lang) => {
+                          setSelectedWord(w);
+                          setSelectedLang(lang);
+                        }}
+                        onEngWordClick={(word) =>
+                          onGo(word, ENG_SOURCES.has(source) ? source : "NASB")
+                        }
+                        onRefClick={(r) =>
+                          setChapterView({
+                            abbr3: r.bookAbbr,
+                            bookName: r.book,
+                            chapter: r.chapter,
+                            highlightVerse: r.verse,
+                            testament: r.testament,
+                          })
+                        }
+                        onBookmark={addBookmark}
+                        isBookmarked={isBookmarked}
+                        crossRefs={crossRefMap.get(crKey)}
+                        onCrossRefClick={(bookId, chapter, verse) => {
+                          const book = BOOK_BY_ID.get(bookId);
+                          if (book) setChapterView({ abbr3: book.abbr3, bookName: book.name, chapter, highlightVerse: verse, testament: book.testament });
+                        }}
+                        onAddCrossRef={(bookId, chapter, verse, raw) =>
+                          handleAddCrossRef(bookId, chapter, verse, raw)
+                        }
+                      />
+                    );
+                  })
                 )}
               </>
             )}
@@ -623,6 +679,13 @@ export default function App() {
           }}
           onBookmark={addBookmark}
           isBookmarked={isBookmarked}
+          onCrossRefClick={(bookId, chapter, verse) => {
+            const book = BOOK_BY_ID.get(bookId);
+            if (book) setChapterView({ abbr3: book.abbr3, bookName: book.name, chapter, highlightVerse: verse, testament: book.testament });
+          }}
+          onAddCrossRef={(bookId, chapter, verse, raw) =>
+            handleAddCrossRef(bookId, chapter, verse, raw)
+          }
         />
       )}
     </div>

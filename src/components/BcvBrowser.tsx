@@ -338,6 +338,15 @@ export function BcvBrowser({
               isBookmarked={isBookmarked}
               versesWithNotes={versesWithNotes}
               onNotesBadgeClick={() => onOpenClass()}
+              onCrossRefClick={onNavigate}
+              onAddCrossRef={(bookId, chapter, verse, raw) => {
+                try {
+                  getClassClient().crossRef.add({
+                    sourceBookId: bookId, sourceChapter: chapter, sourceVerse: verse,
+                    targetRawInput: raw, createdFrom: 'browse',
+                  });
+                } catch { /* class client not ready */ }
+              }}
             />
           </div>
         )}

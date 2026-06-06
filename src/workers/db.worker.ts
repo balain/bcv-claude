@@ -34,6 +34,8 @@ const ENG_SOURCES = new Set<Source>(['KJV', 'ASV', 'LEB', 'NASB']);
 // ─── global DB handle ─────────────────────────────────────────────────────────
 
 let db: any = null;
+/** True once we've confirmed cross_refs table exists in the loaded DB. */
+let hasCrossRefs = false;
 
 // ─── message helpers ─────────────────────────────────────────────────────────
 
@@ -149,14 +151,20 @@ async function openDb(sqlite3: any, preloaded?: Uint8Array): Promise<any> {
   post({ type: 'progress', message: 'Initializing…' });
 
   const p = sqlite3.wasm.allocFromTypedArray(data);
-  const db = new sqlite3.oo1.DB();
+  const openedDb = new sqlite3.oo1.DB();
   const rc = sqlite3.capi.sqlite3_deserialize(
-    db.pointer, 'main', p, data.byteLength, data.byteLength,
+    openedDb.pointer, 'main', p, data.byteLength, data.byteLength,
     sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE |
     sqlite3.capi.SQLITE_DESERIALIZE_RESIZABLE,
   );
-  db.checkRc(rc);
-  return db;
+  openedDb.checkRc(rc);
+  // Check if this DB was built with cross_refs support
+  const crRows: any[][] = openedDb.exec(
+    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cross_refs'",
+    { returnValue: 'resultRows' }
+  );
+  hasCrossRefs = crRows.length > 0;
+  return openedDb;
 }
 
 // ─── SQL queries ──────────────────────────────────────────────────────────────
@@ -269,6 +277,46 @@ const CHAPTER_ORIGINALS_SQL = `
     CASE t.corpus WHEN 'WLC' THEN 0 WHEN 'GNT' THEN 0 ELSE 1 END,
     t.word_num
 `;
+
+const CROSS_REFS_SQL = `
+  SELECT cr.source_book_id, cr.source_chapter, cr.source_verse,
+         cr.target_book_id, cr.target_chapter, cr.target_verse_start, cr.target_verse_end,
+         cr.votes, cr.source_dataset,
+         bm.abbr3 AS target_abbr3, bm.name AS target_book_name
+  FROM cross_refs cr
+  JOIN book_meta bm ON bm.id = cr.target_book_id
+  WHERE cr.source_book_id = ?1 AND cr.source_chapter = ?2 AND cr.source_verse = ?3
+  ORDER BY cr.votes DESC
+  LIMIT 50
+`;
+
+function rowToCrossRef(row: any[]) {
+  const [srcBk, srcCh, srcVs, tgtBk, tgtCh, tgtVsStart, tgtVsEnd, votes, dataset, tgtAbbr3, tgtBookName] = row;
+  const label = tgtVsEnd
+    ? `${tgtBookName} ${tgtCh}:${tgtVsStart}–${tgtVsEnd}`
+    : `${tgtBookName} ${tgtCh}:${tgtVsStart}`;
+  return {
+    sourceBookId: srcBk, sourceChapter: srcCh, sourceVerse: srcVs,
+    targetBookId: tgtBk, targetChapter: tgtCh,
+    targetVerseStart: tgtVsStart, targetVerseEnd: tgtVsEnd ?? null,
+    targetLabel: label, targetAbbr3: tgtAbbr3,
+    votes: votes ?? null, sourceDataset: dataset,
+  };
+}
+
+function execFetchCrossRefs(bookId: number, chapter: number, verse: number): any[] {
+  if (!db || !hasCrossRefs) return [];
+  const rows: any[][] = db.exec(CROSS_REFS_SQL, { bind: [bookId, chapter, verse], returnValue: 'resultRows' });
+  return rows.map(rowToCrossRef);
+}
+
+function execFetchCrossRefsBulk(verses: Array<{ bookId: number; chapter: number; verse: number }>) {
+  if (!db || !hasCrossRefs || verses.length === 0) return [];
+  return verses.map(({ bookId, chapter, verse }) => ({
+    key: `${bookId}:${chapter}:${verse}`,
+    refs: execFetchCrossRefs(bookId, chapter, verse),
+  }));
+}
 
 function ftsEscape(q: string): string {
   // Phrase search: if the query starts AND ends with a double-quote, treat the
@@ -452,6 +500,10 @@ self.addEventListener('message', (e: MessageEvent) => {
       post({ id: msg.id, ok: true, data: execFetchChapter(msg.abbr3, msg.chapter, msg.translation) });
     } else if (msg.type === 'fetch_chapter_originals') {
       post({ id: msg.id, ok: true, data: execFetchChapterOriginals(msg.abbr3, msg.chapter, msg.testament) });
+    } else if (msg.type === 'fetch_cross_refs') {
+      post({ id: msg.id, ok: true, data: execFetchCrossRefs(msg.bookId, msg.chapter, msg.verse) });
+    } else if (msg.type === 'fetch_cross_refs_bulk') {
+      post({ id: msg.id, ok: true, data: execFetchCrossRefsBulk(msg.verses) });
     } else if (msg.type === 'force_refresh') {
       // Async: clear cache, re-download, re-open DB, then reply.
       (async () => {

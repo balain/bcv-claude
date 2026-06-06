@@ -5,7 +5,7 @@
 // Apply on init via `applySchema(db)`.
 // ============================================================================
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS _meta (
 );
 
 INSERT OR IGNORE INTO _meta(key, value) VALUES
-  ('schema_version', '1'),
+  ('schema_version', '2'),
   ('created_at',     strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   ('device_id',      lower(hex(randomblob(8))));
 
@@ -227,6 +227,37 @@ BEGIN
   UPDATE lex_marks SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
 END;
 
+CREATE TABLE IF NOT EXISTS user_cross_refs (
+  id                  INTEGER PRIMARY KEY,
+  external_id         TEXT NOT NULL UNIQUE,
+  session_id          INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+  source_book_id      INTEGER NOT NULL,
+  source_chapter      INTEGER NOT NULL,
+  source_verse        INTEGER NOT NULL,
+  target_book_id      INTEGER NOT NULL,
+  target_chapter      INTEGER NOT NULL,
+  target_verse_start  INTEGER NOT NULL,
+  target_verse_end    INTEGER,
+  note                TEXT,
+  created_from        TEXT NOT NULL
+                      CHECK (created_from IN ('search', 'browse', 'class')),
+  created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  deleted_at          TEXT
+);
+
+CREATE INDEX IF NOT EXISTS user_cross_refs_source_idx
+  ON user_cross_refs(source_book_id, source_chapter, source_verse);
+CREATE INDEX IF NOT EXISTS user_cross_refs_target_idx
+  ON user_cross_refs(target_book_id, target_chapter, target_verse_start);
+CREATE INDEX IF NOT EXISTS user_cross_refs_session_idx
+  ON user_cross_refs(session_id);
+
+CREATE TRIGGER IF NOT EXISTS user_cross_refs_updated_at AFTER UPDATE ON user_cross_refs
+BEGIN
+  UPDATE user_cross_refs SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
+END;
+
 CREATE VIEW IF NOT EXISTS v_series         AS SELECT * FROM series         WHERE deleted_at IS NULL;
 CREATE VIEW IF NOT EXISTS v_sessions       AS SELECT * FROM sessions       WHERE deleted_at IS NULL;
 CREATE VIEW IF NOT EXISTS v_scripture_refs AS SELECT * FROM scripture_refs WHERE deleted_at IS NULL;
@@ -235,15 +266,63 @@ CREATE VIEW IF NOT EXISTS v_session_topics AS SELECT * FROM session_topics WHERE
 CREATE VIEW IF NOT EXISTS v_follow_ups     AS SELECT * FROM follow_ups     WHERE deleted_at IS NULL;
 CREATE VIEW IF NOT EXISTS v_notes          AS SELECT * FROM notes          WHERE deleted_at IS NULL;
 CREATE VIEW IF NOT EXISTS v_lex_marks      AS SELECT * FROM lex_marks      WHERE deleted_at IS NULL;
+CREATE VIEW IF NOT EXISTS v_user_cross_refs AS SELECT * FROM user_cross_refs WHERE deleted_at IS NULL;
 `.trim();
+
+// Migrations to run on schema version upgrades.
+// Key = target version; value = SQL to apply.
+const MIGRATIONS: Record<number, string> = {
+  2: `
+    CREATE TABLE IF NOT EXISTS user_cross_refs (
+      id                  INTEGER PRIMARY KEY,
+      external_id         TEXT NOT NULL UNIQUE,
+      session_id          INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+      source_book_id      INTEGER NOT NULL,
+      source_chapter      INTEGER NOT NULL,
+      source_verse        INTEGER NOT NULL,
+      target_book_id      INTEGER NOT NULL,
+      target_chapter      INTEGER NOT NULL,
+      target_verse_start  INTEGER NOT NULL,
+      target_verse_end    INTEGER,
+      note                TEXT,
+      created_from        TEXT NOT NULL
+                          CHECK (created_from IN ('search', 'browse', 'class')),
+      created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      deleted_at          TEXT
+    );
+    CREATE INDEX IF NOT EXISTS user_cross_refs_source_idx
+      ON user_cross_refs(source_book_id, source_chapter, source_verse);
+    CREATE INDEX IF NOT EXISTS user_cross_refs_target_idx
+      ON user_cross_refs(target_book_id, target_chapter, target_verse_start);
+    CREATE INDEX IF NOT EXISTS user_cross_refs_session_idx
+      ON user_cross_refs(session_id);
+    CREATE TRIGGER IF NOT EXISTS user_cross_refs_updated_at AFTER UPDATE ON user_cross_refs
+    BEGIN
+      UPDATE user_cross_refs SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
+    END;
+    CREATE VIEW IF NOT EXISTS v_user_cross_refs AS SELECT * FROM user_cross_refs WHERE deleted_at IS NULL;
+    UPDATE _meta SET value = '2' WHERE key = 'schema_version';
+  `.trim(),
+};
 
 export interface DBLike {
   exec(sql: string): void;
+  /** Select a single row as a plain object (optional — used for migration version check). */
+  get?<T = Record<string, unknown>>(sql: string, bind?: readonly unknown[]): T | undefined;
 }
 
 /**
- * Apply schema. Idempotent (uses IF NOT EXISTS / OR IGNORE).
+ * Apply schema and any pending migrations. Idempotent.
  */
 export function applySchema(db: DBLike): void {
   db.exec(SCHEMA_SQL);
+  // Apply pending migrations on existing databases that were created at a lower version.
+  const currentVersion = db.get
+    ? Number(db.get<{ value: string }>('SELECT value FROM _meta WHERE key = ?', ['schema_version'])?.value ?? 1)
+    : 1;
+  for (let v = currentVersion + 1; v <= SCHEMA_VERSION; v++) {
+    const sql = MIGRATIONS[v];
+    if (sql) db.exec(sql);
+  }
 }

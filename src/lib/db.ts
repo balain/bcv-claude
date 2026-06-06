@@ -92,6 +92,19 @@ class DBClient {
     return this.call({ type: 'force_refresh' });
   }
 
+  fetchCrossRefs(bookId: number, chapter: number, verse: number): Promise<CrossRef[]> {
+    return this.call({ type: 'fetch_cross_refs', bookId, chapter, verse });
+  }
+
+  fetchCrossRefsBulk(verses: Array<{ bookId: number; chapter: number; verse: number }>): Promise<Map<string, CrossRef[]>> {
+    return this.call<Array<{ key: string; refs: CrossRef[] }>>({ type: 'fetch_cross_refs_bulk', verses })
+      .then((items) => {
+        const map = new Map<string, CrossRef[]>();
+        for (const item of items) map.set(item.key, item.refs);
+        return map;
+      });
+  }
+
 }
 
 export interface ChapterVerse {
@@ -115,6 +128,25 @@ export interface ChapterVerseOriginals {
       form: string | null; corpus: 'WLC' | 'LXX' | 'GNT'; highlight: boolean;
     }[];
   }[];
+}
+
+export interface CrossRef {
+  sourceBookId: number;
+  sourceChapter: number;
+  sourceVerse: number;
+  targetBookId: number;
+  targetChapter: number;
+  targetVerseStart: number;
+  targetVerseEnd: number | null;
+  /** Human-readable label, e.g. "John 3:16" */
+  targetLabel: string;
+  targetAbbr3: string;
+  votes: number | null;
+  sourceDataset: 'openbible' | 'user';
+  /** Only present on user-added refs */
+  userRefId?: number;
+  userNote?: string | null;
+  createdFrom?: 'search' | 'browse' | 'class';
 }
 
 export interface LexEntry {

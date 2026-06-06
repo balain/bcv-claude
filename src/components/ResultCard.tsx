@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BibleResult, Lang, OriginalSection, WordToken } from '../types';
+import type { CrossRef } from '../lib/db';
 import { BOOK_BY_ABBR3 } from '../lib/books';
 import { WordChip } from './WordChip';
 
@@ -10,6 +11,9 @@ interface Props {
   onRefClick: (result: BibleResult) => void;
   onBookmark?: (bookId: number, chapter: number, verse: number, label: string) => void;
   isBookmarked?: (bookId: number, chapter: number, verse: number) => boolean;
+  crossRefs?: CrossRef[];
+  onCrossRefClick?: (bookId: number, chapter: number, verse: number) => void;
+  onAddCrossRef?: (bookId: number, chapter: number, verse: number, rawTarget: string) => void;
 }
 
 /** Strip leading/trailing punctuation to get a clean search term. */
@@ -23,10 +27,18 @@ const SECTION_LABEL: Record<string, string> = {
   GNT: 'Greek (GNT)',
 };
 
-export function ResultCard({ result, onWordTap, onEngWordClick, onRefClick, onBookmark, isBookmarked }: Props) {
+const MAX_CROSS_REFS_VISIBLE = 5;
+
+export function ResultCard({
+  result, onWordTap, onEngWordClick, onRefClick, onBookmark, isBookmarked,
+  crossRefs, onCrossRefClick, onAddCrossRef,
+}: Props) {
   const bookId = BOOK_BY_ABBR3.get(result.bookAbbr)?.id ?? 0;
   const bookmarked = isBookmarked?.(bookId, result.chapter, result.verse) ?? false;
   const [expanded, setExpanded] = useState(true);
+  const [crossRefsOpen, setCrossRefsOpen] = useState(false);
+  const [addingCrossRef, setAddingCrossRef] = useState(false);
+  const [crossRefInput, setCrossRefInput] = useState('');
   // Start collapsed for English sources — the interlinear is supplementary there.
   const isOrigLang = result.source === 'Heb' || result.source === 'LXX' || result.source === 'GNT';
   const [interlinearOpen, setInterlinearOpen] = useState(isOrigLang);
@@ -202,6 +214,108 @@ export function ResultCard({ result, onWordTap, onEngWordClick, onRefClick, onBo
                   background: 'var(--parchment-mid)',
                 }}>
                   {result.originals.map((s) => SECTION_LABEL[s.corpus]).join(' · ')} ▶
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cross-references section */}
+          {(crossRefs && crossRefs.length > 0 || onAddCrossRef) && (
+            <div style={{ borderTop: '1px solid var(--border)', background: 'var(--parchment)' }}>
+              <div
+                onClick={() => setCrossRefsOpen((v) => !v)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '4px 10px', cursor: 'pointer',
+                }}
+              >
+                <span style={{ fontSize: 11, color: 'var(--ink-light)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' as const, flex: 1 }}>
+                  Cross-refs {crossRefs && crossRefs.length > 0 ? `(${crossRefs.length})` : ''}
+                </span>
+                {onAddCrossRef && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setAddingCrossRef((v) => !v); }}
+                    title="Add cross-reference"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: accentColor, fontSize: 13, padding: '0 2px' }}
+                  >+</button>
+                )}
+                {crossRefs && crossRefs.length > 0 && (
+                  <span style={{ fontSize: 10, color: 'var(--ink-light)' }}>{crossRefsOpen ? '▼' : '▶'}</span>
+                )}
+              </div>
+
+              {addingCrossRef && onAddCrossRef && (
+                <div style={{ padding: '0 10px 6px', display: 'flex', gap: 6 }}>
+                  <input
+                    autoFocus
+                    placeholder="Target reference (e.g. John 3:16)"
+                    value={crossRefInput}
+                    onChange={(e) => setCrossRefInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && crossRefInput.trim()) {
+                        onAddCrossRef(bookId, result.chapter, result.verse, crossRefInput.trim());
+                        setCrossRefInput('');
+                        setAddingCrossRef(false);
+                      } else if (e.key === 'Escape') {
+                        setAddingCrossRef(false);
+                      }
+                    }}
+                    style={{
+                      flex: 1, fontSize: 12, padding: '4px 8px', borderRadius: 6,
+                      border: `1px solid ${accentColor}`, outline: 'none',
+                      fontFamily: 'DM Sans',
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      if (crossRefInput.trim()) {
+                        onAddCrossRef(bookId, result.chapter, result.verse, crossRefInput.trim());
+                        setCrossRefInput('');
+                        setAddingCrossRef(false);
+                      }
+                    }}
+                    style={{
+                      padding: '4px 10px', borderRadius: 6, border: 'none',
+                      background: accentColor, color: '#fff', fontSize: 12,
+                      cursor: 'pointer', fontFamily: 'DM Sans',
+                    }}
+                  >Add</button>
+                </div>
+              )}
+
+              {crossRefsOpen && crossRefs && crossRefs.length > 0 && (
+                <div style={{ padding: '2px 10px 6px' }}>
+                  {crossRefs.slice(0, MAX_CROSS_REFS_VISIBLE).map((cr, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span
+                        onClick={() => onCrossRefClick?.(cr.targetBookId, cr.targetChapter, cr.targetVerseStart)}
+                        style={{
+                          fontSize: 12, color: accentColor, cursor: onCrossRefClick ? 'pointer' : 'default',
+                          fontFamily: 'DM Sans', fontWeight: 500, textDecoration: 'underline',
+                        }}
+                      >
+                        {cr.targetLabel}
+                      </span>
+                      {cr.sourceDataset === 'user' && (
+                        <span style={{ fontSize: 10, color: 'var(--indigo)', fontWeight: 600 }}>★</span>
+                      )}
+                      {cr.userNote && (
+                        <span style={{ fontSize: 11, color: 'var(--ink-mid)', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {cr.userNote}
+                        </span>
+                      )}
+                      {cr.votes != null && (
+                        <span style={{ fontSize: 10, color: 'var(--ink-light)', marginLeft: 'auto', flexShrink: 0 }}>
+                          {cr.votes}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {crossRefs.length > MAX_CROSS_REFS_VISIBLE && (
+                    <div style={{ fontSize: 11, color: 'var(--ink-light)', paddingTop: 2 }}>
+                      +{crossRefs.length - MAX_CROSS_REFS_VISIBLE} more
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -12,7 +12,7 @@
 
 import type {
   ClassRequest, RpcResponse, Session, SessionStatus, ScriptureRef,
-  Series, SessionSummary, SessionExportV1, ImportReport,
+  Series, SessionSummary, SessionExportV1, ImportReport, UserCrossRef,
 } from './types.ts';
 
 interface PendingResolver {
@@ -88,6 +88,26 @@ class ClassClient {
     delete: (refId: number) => this.call<{ ok: true }>('class_ref_delete', { refId }),
     listByChapter: (bookId: number, chapter: number) =>
       this.call<ScriptureRef[]>('class_ref_by_chapter', { bookId, chapter }),
+  };
+
+  // ---- User cross-refs ----
+  crossRef = {
+    add: (input: {
+      sourceBookId: number; sourceChapter: number; sourceVerse: number;
+      targetRawInput: string; sessionId?: number; note?: string;
+      createdFrom: 'search' | 'browse' | 'class';
+    }) => this.call<UserCrossRef[]>('class_cross_ref_add', input),
+
+    update: (id: number, patch: { note?: string | null }) =>
+      this.call<UserCrossRef>('class_cross_ref_update', { id, patch }),
+
+    delete: (id: number) => this.call<{ ok: true }>('class_cross_ref_delete', { id }),
+
+    listBySource: (sourceBookId: number, sourceChapter: number, sourceVerse: number) =>
+      this.call<UserCrossRef[]>('class_cross_ref_list_by_source', { sourceBookId, sourceChapter, sourceVerse }),
+
+    listByChapter: (sourceBookId: number, sourceChapter: number) =>
+      this.call<UserCrossRef[]>('class_cross_ref_list_by_chapter', { sourceBookId, sourceChapter }),
   };
 
   // ---- Export / import ----

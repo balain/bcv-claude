@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dbClient } from '../lib/db';
-import type { ChapterVerse, ChapterVerseOriginals } from '../lib/db';
+import type { ChapterVerse, ChapterVerseOriginals, CrossRef } from '../lib/db';
 import type { Lang, Source, WordToken } from '../types';
 import { BOOK_BY_ABBR3 } from '../lib/books';
 import { WordChip } from './WordChip';
 import { DefinitionSheet } from './DefinitionSheet';
+import { getCrossRefsBulk } from '../lib/crossRefs';
 
 interface ChapterViewProps {
   abbr3: string;
@@ -26,6 +27,10 @@ interface ChapterViewProps {
   versesWithNotes?: Set<number>;
   /** Called when user taps a verse's notes badge. */
   onNotesBadgeClick?: (verse: number) => void;
+  /** Called when user clicks a cross-reference target to navigate to it. */
+  onCrossRefClick?: (bookId: number, chapter: number, verse: number) => void;
+  /** Called when user adds a user cross-ref from this chapter view. */
+  onAddCrossRef?: (bookId: number, chapter: number, verse: number, rawTarget: string) => void;
 }
 
 const SECTION_LABEL: Record<string, string> = {
@@ -38,7 +43,7 @@ export function ChapterView({
   abbr3, bookName, chapter: initialChapter, highlightVerse,
   testament, onClose, onSearch,
   standalone, onOpenInBrowse, onBookmark, isBookmarked,
-  versesWithNotes, onNotesBadgeClick,
+  versesWithNotes, onNotesBadgeClick, onCrossRefClick, onAddCrossRef,
 }: ChapterViewProps) {
   const bookId = BOOK_BY_ABBR3.get(abbr3)?.id ?? 0;
   const [currentChapter, setCurrentChapter] = useState(initialChapter);
@@ -51,6 +56,10 @@ export function ChapterView({
 
   const [selectedWord, setSelectedWord] = useState<WordToken | null>(null);
   const [selectedLang, setSelectedLang] = useState<Lang | null>(null);
+  const [crossRefsByVerse, setCrossRefsByVerse] = useState<Map<string, CrossRef[]>>(new Map());
+  const [expandedCrossRefVerse, setExpandedCrossRefVerse] = useState<number | null>(null);
+  const [addingCrossRefVerse, setAddingCrossRefVerse] = useState<number | null>(null);
+  const [crossRefInput, setCrossRefInput] = useState('');
 
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -58,11 +67,14 @@ export function ChapterView({
   const accentColor = testament === 'OT' ? 'var(--amber)' : 'var(--indigo)';
   const accentBg    = testament === 'OT' ? 'var(--amber-bg)' : 'var(--indigo-bg)';
 
-  // Fetch chapter text + originals whenever abbr3 or currentChapter changes
+  // Fetch chapter text + originals + cross-refs whenever abbr3 or currentChapter changes
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setVerseOriginals([]);
+    setCrossRefsByVerse(new Map());
+    setExpandedCrossRefVerse(null);
+    setAddingCrossRefVerse(null);
     Promise.all([
       dbClient.fetchChapter(abbr3, currentChapter),
       dbClient.fetchChapterOriginals(abbr3, currentChapter, testament),
@@ -72,11 +84,16 @@ export function ChapterView({
       setTotalChapters(chapterData.totalChapters);
       setVerseOriginals(originals);
       setLoading(false);
+      // Fetch cross-refs after chapter text is ready
+      const verseSpecs = chapterData.verses.map((v) => ({ bookId, chapter: currentChapter, verse: v.verse }));
+      getCrossRefsBulk(verseSpecs).then((map) => {
+        if (!cancelled) setCrossRefsByVerse(map);
+      }).catch(() => {/* cross-refs unavailable in old DB — ignore */});
     }).catch(() => {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [abbr3, currentChapter, testament]);
+  }, [abbr3, currentChapter, testament, bookId]);
 
   // Scroll to highlighted verse after data loads; otherwise scroll to top
   useEffect(() => {
@@ -211,6 +228,12 @@ export function ChapterView({
           const hasNote = versesWithNotes?.has(v.verse) ?? false;
           const bookmarked = isBookmarked?.(bookId, currentChapter, v.verse) ?? false;
 
+          const verseKey = `${bookId}:${currentChapter}:${v.verse}`;
+          const verseCrossRefs = crossRefsByVerse.get(verseKey) ?? [];
+          const crossRefCount = verseCrossRefs.length;
+          const isCrExpanded = expandedCrossRefVerse === v.verse;
+          const isAddingCr = addingCrossRefVerse === v.verse;
+
           return (
             <div
               key={v.verse}
@@ -226,7 +249,7 @@ export function ChapterView({
                 display: 'flex', alignItems: 'flex-start', gap: 10,
                 padding: isHighlight ? '6px 8px 4px' : '2px 8px 4px',
               }}>
-                {/* Verse number + optional notes dot */}
+                {/* Verse number + optional badges */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, gap: 2 }}>
                   <span style={{
                     minWidth: 24, padding: '1px 6px', borderRadius: 20,
@@ -246,6 +269,24 @@ export function ChapterView({
                         cursor: 'pointer', padding: 0, flexShrink: 0,
                       }}
                     />
+                  )}
+                  {(crossRefCount > 0 || onAddCrossRef) && (
+                    <button
+                      onClick={() => {
+                        setExpandedCrossRefVerse(isCrExpanded ? null : v.verse);
+                        setAddingCrossRefVerse(null);
+                      }}
+                      title={crossRefCount > 0 ? `${crossRefCount} cross-reference${crossRefCount !== 1 ? 's' : ''}` : 'Cross-references'}
+                      style={{
+                        background: isCrExpanded ? accentColor : 'var(--parchment-mid)',
+                        border: 'none', borderRadius: 4, padding: '1px 3px',
+                        fontSize: 8, fontWeight: 700, fontFamily: 'DM Sans',
+                        color: isCrExpanded ? '#fff' : 'var(--ink-light)',
+                        cursor: 'pointer', flexShrink: 0, lineHeight: 1.4,
+                      }}
+                    >
+                      {crossRefCount > 0 ? `⇄${crossRefCount}` : '⇄'}
+                    </button>
                   )}
                 </div>
 
@@ -269,6 +310,75 @@ export function ChapterView({
                   </button>
                 )}
               </div>
+
+              {/* Cross-refs inline panel */}
+              {isCrExpanded && (
+                <div style={{ background: 'var(--parchment)', borderTop: '1px solid var(--border)', padding: '6px 10px 6px 40px' }}>
+                  {verseCrossRefs.slice(0, 10).map((cr, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <span
+                        onClick={() => onCrossRefClick?.(cr.targetBookId, cr.targetChapter, cr.targetVerseStart)}
+                        style={{
+                          fontSize: 12, color: accentColor, fontFamily: 'DM Sans', fontWeight: 500,
+                          cursor: onCrossRefClick ? 'pointer' : 'default', textDecoration: 'underline',
+                        }}
+                      >
+                        {cr.targetLabel}
+                      </span>
+                      {cr.sourceDataset === 'user' && (
+                        <span style={{ fontSize: 10, color: 'var(--indigo)', fontWeight: 600 }}>★</span>
+                      )}
+                      {cr.userNote && (
+                        <span style={{ fontSize: 11, color: 'var(--ink-mid)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                          {cr.userNote}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {verseCrossRefs.length > 10 && (
+                    <div style={{ fontSize: 11, color: 'var(--ink-light)' }}>+{verseCrossRefs.length - 10} more</div>
+                  )}
+                  {onAddCrossRef && (
+                    <div style={{ marginTop: 4 }}>
+                      {isAddingCr ? (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input
+                            autoFocus
+                            placeholder="Target reference (e.g. John 3:16)"
+                            value={crossRefInput}
+                            onChange={(e) => setCrossRefInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && crossRefInput.trim()) {
+                                onAddCrossRef(bookId, currentChapter, v.verse, crossRefInput.trim());
+                                setCrossRefInput('');
+                                setAddingCrossRefVerse(null);
+                              } else if (e.key === 'Escape') {
+                                setAddingCrossRefVerse(null);
+                              }
+                            }}
+                            style={{ flex: 1, fontSize: 12, padding: '3px 6px', borderRadius: 5, border: `1px solid ${accentColor}`, outline: 'none', fontFamily: 'DM Sans' }}
+                          />
+                          <button
+                            onClick={() => {
+                              if (crossRefInput.trim()) {
+                                onAddCrossRef(bookId, currentChapter, v.verse, crossRefInput.trim());
+                                setCrossRefInput('');
+                                setAddingCrossRefVerse(null);
+                              }
+                            }}
+                            style={{ padding: '3px 8px', borderRadius: 5, border: 'none', background: accentColor, color: '#fff', fontSize: 11, cursor: 'pointer' }}
+                          >Add</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setAddingCrossRefVerse(v.verse); setCrossRefInput(''); }}
+                          style={{ fontSize: 11, color: accentColor, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        >+ Add cross-ref</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {originalsOpen && originals.length > 0 && originals.map((section) => (
                 <div key={section.corpus} style={{

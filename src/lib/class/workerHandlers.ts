@@ -82,6 +82,27 @@ export async function handleClassRequest(
     case 'class_ref_by_chapter':
       return da.listRefsByChapter(db, msg.data.bookId, msg.data.chapter);
 
+    // ---- User cross-refs ----
+    case 'class_cross_ref_add':
+      return da.addUserCrossRef(db, msg.data);
+
+    case 'class_cross_ref_update':
+      return da.updateUserCrossRef(db, msg.data.id, msg.data.patch);
+
+    case 'class_cross_ref_delete':
+      da.deleteUserCrossRef(db, msg.data.id);
+      return { ok: true };
+
+    case 'class_cross_ref_list_by_source':
+      return da.listUserCrossRefsBySource(
+        db, msg.data.sourceBookId, msg.data.sourceChapter, msg.data.sourceVerse
+      );
+
+    case 'class_cross_ref_list_by_chapter':
+      return da.listUserCrossRefsByChapter(
+        db, msg.data.sourceBookId, msg.data.sourceChapter
+      );
+
     // ---- Export / import ----
     case 'class_export_session':
       return exportSession(db, msg.data.sessionId);
