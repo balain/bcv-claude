@@ -19,6 +19,9 @@
  */
 
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — Vite resolves this to the correct URL at both dev and build time
+import sqlite3WasmUrl from '@sqlite.org/sqlite-wasm/sqlite3.wasm?url';
 
 // DedicatedWorkerGlobalScope lives in the WebWorker lib, not DOM — cast to avoid tsconfig mismatch
 declare const self: typeof globalThis & { postMessage(msg: unknown): void; addEventListener(type: string, fn: (e: MessageEvent) => void): void };
@@ -455,7 +458,7 @@ self.addEventListener('message', (e: MessageEvent) => {
         try {
           post({ type: 'progress', message: 'Clearing cache…' });
           await clearOpfsCache();
-          const sqlite3 = await (sqlite3InitModule as any)({ printErr: console.error });
+          const sqlite3 = await (sqlite3InitModule as any)({ printErr: console.error, locateFile: (p: string) => p === 'sqlite3.wasm' ? sqlite3WasmUrl : p });
           const data = await fetchWithProgress();
           post({ type: 'progress', message: 'Saving to cache…' });
           await writeOpfsCache(data);
@@ -481,7 +484,7 @@ self.addEventListener('message', (e: MessageEvent) => {
 (async () => {
   try {
     // Type cast because @sqlite.org/sqlite-wasm types don't match the bundler-friendly build
-    const sqlite3 = await (sqlite3InitModule as any)({ printErr: console.error });
+    const sqlite3 = await (sqlite3InitModule as any)({ printErr: console.error, locateFile: (p: string) => p === 'sqlite3.wasm' ? sqlite3WasmUrl : p });
     db = await openDb(sqlite3);
     post({ type: 'ready' });
   } catch (err) {

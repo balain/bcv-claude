@@ -79,6 +79,9 @@ export async function handleClassRequest(
       da.deleteRef(db, msg.data.refId);
       return { ok: true };
 
+    case 'class_ref_by_chapter':
+      return da.listRefsByChapter(db, msg.data.bookId, msg.data.chapter);
+
     // ---- Export / import ----
     case 'class_export_session':
       return exportSession(db, msg.data.sessionId);

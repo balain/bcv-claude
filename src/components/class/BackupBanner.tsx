@@ -39,12 +39,12 @@ function daysBetween(now: Date, isoDate: string | null): number {
 }
 
 export function BackupBanner() {
-  const client = getClassClient();
   const [sev, setSev] = useState<Severity>('none');
   const [daysIdle, setDaysIdle] = useState<number>(0);
 
   async function refresh() {
     try {
+      const client = getClassClient();
       const lastExport = await client.meta.get('last_export_at');
       const lastDismiss = await client.meta.get('backup_banner_dismissed_at');
       const now = new Date();
@@ -67,7 +67,10 @@ export function BackupBanner() {
   }, []);
 
   async function dismiss() {
-    await client.meta.set('backup_banner_dismissed_at', new Date().toISOString());
+    try {
+      const client = getClassClient();
+      await client.meta.set('backup_banner_dismissed_at', new Date().toISOString());
+    } catch { /* ignore */ }
     setSev('none');
   }
 

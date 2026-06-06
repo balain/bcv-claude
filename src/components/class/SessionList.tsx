@@ -20,6 +20,7 @@ export function SessionList({ onOpen }: Props) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [filter, setFilter] = useState<SessionStatus>('active');
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // New-session form state
   const [title, setTitle] = useState('');
@@ -40,13 +41,18 @@ export function SessionList({ onOpen }: Props) {
   const submitCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !taughtOn) return;
-    const s = await client.session.create({
-      title: title.trim(),
-      taughtOn,
-      primaryText: primaryText.trim() || undefined,
-    });
-    setTitle(''); setPrimaryText(''); setCreating(false);
-    onOpen(s.id);
+    setCreateError(null);
+    try {
+      const s = await client.session.create({
+        title: title.trim(),
+        taughtOn,
+        primaryText: primaryText.trim() || undefined,
+      });
+      setTitle(''); setPrimaryText(''); setCreating(false);
+      onOpen(s.id);
+    } catch (err) {
+      setCreateError((err as Error).message ?? String(err));
+    }
   };
 
   const onImportClick = () => fileRef.current?.click();
@@ -80,7 +86,7 @@ export function SessionList({ onOpen }: Props) {
             <option value="active">Active</option>
             <option value="archived">Archived</option>
           </select>
-          <button onClick={() => setCreating((v) => !v)}>
+          <button onClick={() => { setCreating((v) => !v); setCreateError(null); }}>
             {creating ? 'Cancel' : '+ New'}
           </button>
           <button onClick={onImportClick} className="secondary">
@@ -125,6 +131,11 @@ export function SessionList({ onOpen }: Props) {
               placeholder="Col 1:15-20"
             />
           </label>
+          {createError && (
+            <p style={{ color: 'var(--error, #c0392b)', fontSize: 13, margin: '0 0 4px' }}>
+              {createError}
+            </p>
+          )}
           <button type="submit">Create</button>
         </form>
       )}

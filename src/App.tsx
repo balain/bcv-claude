@@ -7,17 +7,26 @@ import { GlossCard } from "./components/GlossCard";
 import { ResultCard } from "./components/ResultCard";
 import { DefinitionSheet } from "./components/DefinitionSheet";
 import { ChapterView } from "./components/ChapterView";
+import { BcvBrowser } from "./components/BcvBrowser";
 import { SearchHistory } from "./components/SearchHistory";
 import type { HistoryEntry } from "./components/SearchHistory";
 import { computeDistribution } from "./lib/search";
 import { dbClient } from "./lib/db";
 import type { DBStatus, LexEntry } from "./lib/db";
-import type { Lang, Source, WordToken, BibleResult } from "./types";
+import type { Lang, Source, WordToken, BibleResult, Bookmark } from "./types";
 import { ClassMode } from "./components/class/ClassMode";
 import { initClassClient } from "./lib/class/client";
 import { BOOK_BY_ID } from "./lib/books";
+import { loadBookmarks, saveBookmarks } from "./lib/bookmarks";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
+
+// Initialize the class worker at module load time so getClassClient() is always
+// ready on first render — avoids the useEffect timing race when #/class is the
+// initial URL.
+initClassClient(
+  new Worker(new URL("./workers/class.worker.ts", import.meta.url), { type: "module" }),
+);
 
 export default function App() {
   const [query, setQuery] = useState("loving");
@@ -61,27 +70,42 @@ export default function App() {
     testament: "OT" | "NT";
   } | null>(null);
 
-  // ─── Class Mode ──────────────────────────────────────────────────────────
-  const [mode, setMode] = useState<"search" | "class">(() =>
-    location.hash.startsWith("#/class") ? "class" : "search",
-  );
+  // ─── Mode & routing ──────────────────────────────────────────────────────
 
-  useEffect(() => {
-    // Spawn a dedicated worker for class.db (separate from bcv-db worker).
-    const w = new Worker(
-      new URL("./workers/class.worker.ts", import.meta.url),
-      { type: "module" },
-    );
-    initClassClient(w);
-    return () => w.terminate();
-  }, []);
+  function parseBrowsePos(hash: string): { bookId: number; chapter: number; verse: number } | null {
+    const m = /^#\/bcv\/(\d+)\/(\d+)/.exec(hash);
+    if (!m) return null;
+    const vMatch = /[?&]v=(\d+)/.exec(hash);
+    return { bookId: Number(m[1]), chapter: Number(m[2]), verse: vMatch ? Number(vMatch[1]) : 1 };
+  }
+
+  function modeFromHash(hash: string): "search" | "browse" | "class" {
+    if (hash.startsWith("#/class")) return "class";
+    if (hash.startsWith("#/bcv") || hash.startsWith("#/browse")) return "browse";
+    return "search";
+  }
+
+  const [mode, setMode] = useState<"search" | "browse" | "class">(() => modeFromHash(location.hash));
+  const [browsePos, setBrowsePos] = useState<{ bookId: number; chapter: number; verse: number } | null>(
+    () => parseBrowsePos(location.hash),
+  );
+  // When navigating to browse from class mode, remember the class hash so the
+  // user can return to their specific session with one tap.
+  const [browseReturnUrl, setBrowseReturnUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const onHash = () => {
-      setMode(location.hash.startsWith("#/class") ? "class" : "search");
+      const h = location.hash;
+      setMode(modeFromHash(h));
+      setBrowsePos(parseBrowsePos(h));
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const handleBrowseNavigate = useCallback((bookId: number, chapter: number, verse: number) => {
+    const verseQ = verse > 0 ? `?v=${verse}` : "";
+    location.hash = `#/bcv/${bookId}/${chapter}${verseQ}`;
   }, []);
 
   // Called by ClassMode when a ref is tapped — opens ChapterView as an overlay
@@ -92,6 +116,33 @@ export default function App() {
       setChapterView({ abbr3: book.abbr3, bookName: book.name, chapter, highlightVerse: verse, testament: book.testament });
     }
   }, []);
+
+  // ─── Bookmarks ───────────────────────────────────────────────────────────
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => loadBookmarks());
+
+  const addBookmark = useCallback((bookId: number, chapter: number, verse: number, label: string) => {
+    setBookmarks((prev) => {
+      // Toggle: remove if already bookmarked, otherwise prepend
+      const exists = prev.findIndex((b) => b.bookId === bookId && b.chapter === chapter && b.verse === verse);
+      const next = exists >= 0
+        ? prev.filter((_, i) => i !== exists)
+        : [{ id: crypto.randomUUID(), bookId, chapter, verse, label, createdAt: Date.now() }, ...prev];
+      saveBookmarks(next);
+      return next;
+    });
+  }, []);
+
+  const removeBookmark = useCallback((id: string) => {
+    setBookmarks((prev) => {
+      const next = prev.filter((b) => b.id !== id);
+      saveBookmarks(next);
+      return next;
+    });
+  }, []);
+
+  const isBookmarked = useCallback((bookId: number, chapter: number, verse: number) =>
+    bookmarks.some((b) => b.bookId === bookId && b.chapter === chapter && b.verse === verse),
+  [bookmarks]);
 
   // Gloss card for original-language single-word searches.
   // glossCardOpen is intentionally NOT reset on query change — the user's
@@ -254,85 +305,101 @@ export default function App() {
             letterSpacing: "-0.02em",
           }}
         >
-          ✞ {mode === "class" ? "Class" : "BibleSearch"}
+          ✞ BibleSearch
         </span>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button
-            onClick={() => setShowChart((v) => !v)}
-            style={{
-              background: showChart
-                ? "rgba(255,255,255,0.2)"
-                : "rgba(255,255,255,0.1)",
-              border: "none",
-              borderRadius: 8,
-              padding: "5px 8px",
-              color: "#fff",
-              fontSize: 14,
-              cursor: "pointer",
-            }}
-            aria-label="Toggle distribution chart"
-          >
-            📊
-          </button>
-          <button
-            onClick={() => {
-              location.hash = mode === "class" ? "" : "#/class";
-            }}
-            style={{
-              background:
-                mode === "class"
-                  ? "rgba(255,255,255,0.2)"
-                  : "rgba(255,255,255,0.1)",
-              border: "none",
-              borderRadius: 8,
-              padding: "5px 8px",
-              color: "#fff",
-              fontSize: 14,
-              cursor: "pointer",
-            }}
-            aria-label={mode === "class" ? "Back to search" : "Open class mode"}
-            title={mode === "class" ? "Search" : "Class"}
-          >
-            {mode === "class" ? "🔍" : "📚"}
-          </button>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {/* Distribution chart (search mode only) */}
+          {mode === "search" && (
+            <button
+              onClick={() => setShowChart((v) => !v)}
+              style={{
+                background: showChart ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)",
+                border: "none", borderRadius: 8, padding: "5px 8px",
+                color: "#fff", fontSize: 14, cursor: "pointer",
+              }}
+              aria-label="Toggle distribution chart"
+            >📊</button>
+          )}
+
+          {/* Mode nav: Search | Browse | Class */}
+          {(["search", "browse", "class"] as const).map((m) => {
+            const label = m === "search" ? "🔍" : m === "browse" ? "📖" : "📚";
+            const title = m === "search" ? "Search" : m === "browse" ? "Browse" : "Class";
+            return (
+              <button
+                key={m}
+                onClick={() => {
+                  if (m === "search") location.hash = "";
+                  else if (m === "browse") {
+                    if (browsePos) {
+                      const vQ = browsePos.verse > 0 ? `?v=${browsePos.verse}` : "";
+                      location.hash = `#/bcv/${browsePos.bookId}/${browsePos.chapter}${vQ}`;
+                    } else {
+                      location.hash = "#/browse";
+                    }
+                  } else {
+                    location.hash = "#/class";
+                  }
+                }}
+                title={title}
+                aria-label={title}
+                style={{
+                  background: mode === m ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
+                  border: "none", borderRadius: 8, padding: "5px 8px",
+                  color: "#fff", fontSize: 14, cursor: "pointer",
+                  fontWeight: mode === m ? 700 : 400,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+
           <button
             onClick={handleForceRefresh}
             disabled={refreshing}
             title="Re-download database"
             style={{
               background: "rgba(255,255,255,0.1)",
-              border: "none",
-              borderRadius: 8,
-              padding: "5px 8px",
-              color: refreshing
-                ? "rgba(255,255,255,0.4)"
-                : "rgba(255,255,255,0.7)",
-              fontSize: 14,
-              cursor: refreshing ? "default" : "pointer",
-              transition: "color 0.2s",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
+              border: "none", borderRadius: 8, padding: "5px 8px",
+              color: refreshing ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.7)",
+              fontSize: 14, cursor: refreshing ? "default" : "pointer",
+              transition: "color 0.2s", display: "inline-flex",
+              alignItems: "center", justifyContent: "center",
             }}
             aria-label="Re-download database"
           >
-            <span
-              style={{
-                display: "inline-block",
-                animation: refreshing ? "spin 1s linear infinite" : "none",
-              }}
-            >
-              ↻
-            </span>
+            <span style={{ display: "inline-block", animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
           </button>
-          <span style={{ fontSize: 14, color: "rgba(255,255,255,0.6)" }}>
-            ☀
-          </span>
+          <span style={{ fontSize: 14, color: "rgba(255,255,255,0.6)" }}>☀</span>
         </div>
       </div>
 
       {mode === "class" ? (
-        <ClassMode onOpenRef={handleClassRefOpen} />
+        <ClassMode
+          onOpenRef={handleClassRefOpen}
+          onBookmark={addBookmark}
+          isBookmarked={isBookmarked}
+        />
+      ) : mode === "browse" ? (
+        <BcvBrowser
+          browsePos={browsePos}
+          onNavigate={handleBrowseNavigate}
+          bookmarks={bookmarks}
+          onBookmark={addBookmark}
+          onRemoveBookmark={removeBookmark}
+          isBookmarked={isBookmarked}
+          onOpenClass={() => {
+            location.hash = "#/class";
+          }}
+          returnUrl={browseReturnUrl}
+          onReturn={() => {
+            if (browseReturnUrl) {
+              location.hash = browseReturnUrl;
+              setBrowseReturnUrl(null);
+            }
+          }}
+        />
       ) : (
         <>
           <SearchBar
@@ -481,6 +548,8 @@ export default function App() {
                           testament: r.testament,
                         })
                       }
+                      onBookmark={addBookmark}
+                      isBookmarked={isBookmarked}
                     />
                   ))
                 )}
@@ -546,6 +615,14 @@ export default function App() {
             onGo(q, s);
             setChapterView(null);
           }}
+          onOpenInBrowse={(bookId, chapter, verse) => {
+            // Remember the class session URL so the user can return with one tap.
+            if (mode === "class") setBrowseReturnUrl(location.hash);
+            setChapterView(null);
+            handleBrowseNavigate(bookId, chapter, verse);
+          }}
+          onBookmark={addBookmark}
+          isBookmarked={isBookmarked}
         />
       )}
     </div>

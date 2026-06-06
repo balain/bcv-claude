@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { BibleResult, Lang, OriginalSection, WordToken } from '../types';
+import { BOOK_BY_ABBR3 } from '../lib/books';
 import { WordChip } from './WordChip';
 
 interface Props {
@@ -7,6 +8,8 @@ interface Props {
   onWordTap: (word: WordToken, lang: Lang) => void;
   onEngWordClick: (word: string) => void;
   onRefClick: (result: BibleResult) => void;
+  onBookmark?: (bookId: number, chapter: number, verse: number, label: string) => void;
+  isBookmarked?: (bookId: number, chapter: number, verse: number) => boolean;
 }
 
 /** Strip leading/trailing punctuation to get a clean search term. */
@@ -20,7 +23,9 @@ const SECTION_LABEL: Record<string, string> = {
   GNT: 'Greek (GNT)',
 };
 
-export function ResultCard({ result, onWordTap, onEngWordClick, onRefClick }: Props) {
+export function ResultCard({ result, onWordTap, onEngWordClick, onRefClick, onBookmark, isBookmarked }: Props) {
+  const bookId = BOOK_BY_ABBR3.get(result.bookAbbr)?.id ?? 0;
+  const bookmarked = isBookmarked?.(bookId, result.chapter, result.verse) ?? false;
   const [expanded, setExpanded] = useState(true);
   // Start collapsed for English sources — the interlinear is supplementary there.
   const isOrigLang = result.source === 'Heb' || result.source === 'LXX' || result.source === 'GNT';
@@ -142,6 +147,20 @@ export function ResultCard({ result, onWordTap, onEngWordClick, onRefClick }: Pr
           )}
         </div>
 
+        {onBookmark && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onBookmark(bookId, result.chapter, result.verse, result.ref); }}
+            title={bookmarked ? 'Bookmarked' : 'Add bookmark'}
+            aria-label={bookmarked ? 'Bookmarked' : 'Add bookmark'}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: bookmarked ? accentColor : 'var(--ink-light)',
+              fontSize: 16, padding: '0 2px', flexShrink: 0,
+            }}
+          >
+            {bookmarked ? '★' : '☆'}
+          </button>
+        )}
         <button
           onClick={() => setExpanded((v) => !v)}
           style={{

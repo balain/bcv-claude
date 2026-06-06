@@ -32,3 +32,6 @@ dist-ssr
 # Unused template assets and local planning docs
 public/icons.svg
 docs/
+
+.env
+

@@ -24,9 +24,11 @@ function setActiveIdInHash(id: number | null): void {
 
 interface Props {
   onOpenRef: (bookId: number, chapter: number, verse: number) => void;
+  onBookmark?: (bookId: number, chapter: number, verse: number, label: string) => void;
+  isBookmarked?: (bookId: number, chapter: number, verse: number) => boolean;
 }
 
-export function ClassMode({ onOpenRef }: Props) {
+export function ClassMode({ onOpenRef, onBookmark, isBookmarked }: Props) {
   const [activeId, setActiveId] = useState<number | null>(readActiveIdFromHash);
 
   useEffect(() => {
@@ -50,7 +52,13 @@ export function ClassMode({ onOpenRef }: Props) {
       {activeId === null ? (
         <SessionList onOpen={openSession} />
       ) : (
-        <SessionView sessionId={activeId} onBack={closeSession} onOpenRef={onOpenRef} />
+        <SessionView
+          sessionId={activeId}
+          onBack={closeSession}
+          onOpenRef={onOpenRef}
+          onBookmark={onBookmark}
+          isBookmarked={isBookmarked}
+        />
       )}
     </div>
   );
