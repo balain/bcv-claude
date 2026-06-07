@@ -34,6 +34,7 @@ const ENG_SOURCES = new Set<Source>(['KJV', 'ASV', 'LEB', 'NASB']);
 // ─── global DB handle ─────────────────────────────────────────────────────────
 
 let db: any = null;
+let sqlite3Module: any = null;
 /** True once we've confirmed cross_refs table exists in the loaded DB. */
 let hasCrossRefs = false;
 
@@ -50,6 +51,26 @@ const DB_URL = import.meta.env.BASE_URL + 'db/bcv.db';
 const CACHE_MIN_BYTES = 10_000_000; // 10 MB
 /** First 15 bytes of every valid SQLite file. */
 const SQLITE_MAGIC = [83,81,76,105,116,101,32,102,111,114,109,97,116,32,51]; // "SQLite format 3"
+const OPFS_WRITE_CHUNK_BYTES = 4 * 1024 * 1024;
+
+function isPowerOfTwo(n: number): boolean {
+  return n > 0 && (n & (n - 1)) === 0;
+}
+
+function isValidSQLiteBytes(buf: Uint8Array): boolean {
+  if (buf.byteLength < 100) return false;
+  if (!SQLITE_MAGIC.every((b, i) => buf[i] === b)) return false;
+  let pageSize = (buf[16] << 8) | buf[17];
+  if (pageSize === 1) pageSize = 65536;
+  if (pageSize < 512 || pageSize > 65536 || !isPowerOfTwo(pageSize)) return false;
+  const pageCount =
+    ((buf[28] << 24) >>> 0) +
+    (buf[29] << 16) +
+    (buf[30] << 8) +
+    buf[31];
+  if (pageCount <= 0) return false;
+  return buf.byteLength >= pageSize * pageCount;
+}
 
 async function fetchWithProgress(): Promise<Uint8Array> {
   post({ type: 'progress', message: 'Downloading database…' });
@@ -87,8 +108,7 @@ async function readOpfsCache(): Promise<Uint8Array | null> {
     if (file.size < CACHE_MIN_BYTES) return null;
     post({ type: 'progress', message: 'Reading from cache…' });
     const buf = new Uint8Array(await file.arrayBuffer());
-    // Validate SQLite magic bytes
-    if (!SQLITE_MAGIC.every((b, i) => buf[i] === b)) return null;
+    if (!isValidSQLiteBytes(buf)) return null;
     return buf;
   } catch {
     return null;
@@ -108,10 +128,26 @@ async function writeOpfsCache(data: Uint8Array): Promise<boolean> {
     const sah = await (fh as any).createSyncAccessHandle();
     try {
       sah.truncate(0);
-      sah.write(data, { at: 0 });
+      let offset = 0;
+      while (offset < data.byteLength) {
+        const end = Math.min(offset + OPFS_WRITE_CHUNK_BYTES, data.byteLength);
+        const written = sah.write(data.subarray(offset, end), { at: offset });
+        if (written <= 0) {
+          throw new Error(`OPFS write stalled at ${offset} of ${data.byteLength} bytes`);
+        }
+        offset += written;
+      }
+      if (offset !== data.byteLength) {
+        throw new Error(`OPFS write incomplete: ${offset} of ${data.byteLength} bytes`);
+      }
+      sah.truncate(data.byteLength);
       sah.flush();
     } finally {
       sah.close();
+    }
+    const file = await fh.getFile();
+    if (file.size !== data.byteLength) {
+      throw new Error(`OPFS cache size mismatch: wrote ${file.size} of ${data.byteLength} bytes`);
     }
     return true;
   } catch (e) {
@@ -146,25 +182,69 @@ async function clearOpfsCache(): Promise<void> {
   } catch { /* already absent — fine */ }
 }
 
+async function getSqlite3(): Promise<any> {
+  if (!sqlite3Module) {
+    sqlite3Module = await (sqlite3InitModule as any)({
+      printErr: console.error,
+      locateFile: (p: string) => p === 'sqlite3.wasm' ? sqlite3WasmUrl : p,
+    });
+  }
+  return sqlite3Module;
+}
+
+function closeDbQuietly(handle: any): void {
+  try {
+    handle?.close?.();
+  } catch (e) {
+    console.warn('DB close failed:', e);
+  }
+}
+
 async function openDb(sqlite3: any, preloaded?: Uint8Array): Promise<any> {
   const data = preloaded ?? await getDbBytes();
   post({ type: 'progress', message: 'Initializing…' });
 
+  let stage = 'allocating database bytes';
   const p = sqlite3.wasm.allocFromTypedArray(data);
-  const openedDb = new sqlite3.oo1.DB();
-  const rc = sqlite3.capi.sqlite3_deserialize(
-    openedDb.pointer, 'main', p, data.byteLength, data.byteLength,
-    sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE |
-    sqlite3.capi.SQLITE_DESERIALIZE_RESIZABLE,
-  );
-  openedDb.checkRc(rc);
-  // Check if this DB was built with cross_refs support
-  const crRows: any[][] = openedDb.exec(
-    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cross_refs'",
-    { returnValue: 'resultRows' }
-  );
-  hasCrossRefs = crRows.length > 0;
-  return openedDb;
+  if (!p) {
+    throw new Error(`Unable to allocate ${data.byteLength} bytes for SQLite database`);
+  }
+  let openedDb: any = null;
+  let sqliteOwnsBytes = false;
+  try {
+    stage = 'opening in-memory database';
+    openedDb = new sqlite3.oo1.DB();
+    stage = 'deserializing database bytes';
+    const rc = sqlite3.capi.sqlite3_deserialize(
+      openedDb.pointer, 'main', p, data.byteLength, data.byteLength,
+      sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE |
+      sqlite3.capi.SQLITE_DESERIALIZE_RESIZABLE,
+    );
+    sqliteOwnsBytes = rc === sqlite3.capi.SQLITE_OK;
+    stage = 'checking deserialize result';
+    openedDb.checkRc(rc);
+    // Check if this DB was built with cross_refs support
+    stage = 'checking cross_refs schema';
+    const crRows: any[][] = openedDb.exec(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='cross_refs'",
+      { returnValue: 'resultRows' }
+    );
+    hasCrossRefs = crRows.length > 0;
+    stage = 'validating verse data';
+    const verseRows: any[][] = openedDb.exec(
+      "SELECT count(*) FROM verses WHERE translation='NASB'",
+      { returnValue: 'resultRows' }
+    );
+    const verseCount = Number(verseRows[0]?.[0] ?? 0);
+    if (verseCount <= 0) {
+      throw new Error('database opened without NASB verse rows');
+    }
+    return openedDb;
+  } catch (e) {
+    closeDbQuietly(openedDb);
+    if (!sqliteOwnsBytes && sqlite3.wasm?.dealloc) sqlite3.wasm.dealloc(p);
+    throw new Error(`openDb failed while ${stage}: ${String(e)}`);
+  }
 }
 
 // ─── SQL queries ──────────────────────────────────────────────────────────────
@@ -505,18 +585,17 @@ self.addEventListener('message', (e: MessageEvent) => {
     } else if (msg.type === 'fetch_cross_refs_bulk') {
       post({ id: msg.id, ok: true, data: execFetchCrossRefsBulk(msg.verses) });
     } else if (msg.type === 'force_refresh') {
-      // Async: clear cache, re-download, re-open DB, then reply.
+      // Async: clear cache, re-download, and save DB bytes. The main-thread
+      // client reloads the app afterward so sqlite-wasm opens the refreshed DB
+      // in a clean page/worker lifecycle.
       (async () => {
         try {
           post({ type: 'progress', message: 'Clearing cache…' });
           await clearOpfsCache();
-          const sqlite3 = await (sqlite3InitModule as any)({ printErr: console.error, locateFile: (p: string) => p === 'sqlite3.wasm' ? sqlite3WasmUrl : p });
           const data = await fetchWithProgress();
           post({ type: 'progress', message: 'Saving to cache…' });
           await writeOpfsCache(data);
-          db = await openDb(sqlite3, data);
           post({ id: msg.id, ok: true, data: null });
-          post({ type: 'ready' });
         } catch (err) {
           post({ id: msg.id, ok: false, error: String(err) });
           post({ type: 'error', message: String(err) });
@@ -536,7 +615,7 @@ self.addEventListener('message', (e: MessageEvent) => {
 (async () => {
   try {
     // Type cast because @sqlite.org/sqlite-wasm types don't match the bundler-friendly build
-    const sqlite3 = await (sqlite3InitModule as any)({ printErr: console.error, locateFile: (p: string) => p === 'sqlite3.wasm' ? sqlite3WasmUrl : p });
+    const sqlite3 = await getSqlite3();
     db = await openDb(sqlite3);
     post({ type: 'ready' });
   } catch (err) {

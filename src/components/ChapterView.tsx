@@ -51,6 +51,7 @@ export function ChapterView({
   const [totalChapters, setTotalChapters] = useState<number | null>(null);
   const [verses, setVerses] = useState<ChapterVerse[]>([]);
   const [verseOriginals, setVerseOriginals] = useState<ChapterVerseOriginals[]>([]);
+  const [dbStatus, setDbStatus] = useState(dbClient.status);
   const [loading, setLoading] = useState(true);
   const [originalsOpen, setOriginalsOpen] = useState(false);
 
@@ -67,8 +68,17 @@ export function ChapterView({
   const accentColor = testament === 'OT' ? 'var(--amber)' : 'var(--indigo)';
   const accentBg    = testament === 'OT' ? 'var(--amber-bg)' : 'var(--indigo-bg)';
 
+  useEffect(() => {
+    setDbStatus(dbClient.status);
+    return dbClient.onStatus((status) => setDbStatus(status));
+  }, []);
+
   // Fetch chapter text + originals + cross-refs whenever abbr3 or currentChapter changes
   useEffect(() => {
+    if (dbStatus !== 'ready') {
+      setLoading(true);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setVerseOriginals([]);
@@ -93,7 +103,7 @@ export function ChapterView({
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [abbr3, currentChapter, testament, bookId]);
+  }, [abbr3, currentChapter, testament, bookId, dbStatus]);
 
   // Scroll to highlighted verse after data loads; otherwise scroll to top
   useEffect(() => {

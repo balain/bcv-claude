@@ -24,13 +24,18 @@ class DBClient {
   public status: DBStatus = 'initializing';
 
   constructor() {
-    this.worker = new Worker(new URL('../workers/db.worker.ts', import.meta.url), {
+    this.worker = this.createWorker();
+  }
+
+  private createWorker(): Worker {
+    const worker = new Worker(new URL('../workers/db.worker.ts', import.meta.url), {
       type: 'module',
     });
-    this.worker.addEventListener('message', this.onMessage);
-    this.worker.addEventListener('error', (e) => {
+    worker.addEventListener('message', this.onMessage);
+    worker.addEventListener('error', (e) => {
       this.setStatus('error', e.message);
     });
+    return worker;
   }
 
   onStatus(fn: StatusListener): () => void {
@@ -87,9 +92,11 @@ class DBClient {
   }
 
   /** Clear the OPFS cache and re-download the DB from the server. */
-  forceRefresh(): Promise<void> {
+  async forceRefresh(): Promise<void> {
     this.setStatus('progress', 'Clearing cache…');
-    return this.call({ type: 'force_refresh' });
+    await this.call({ type: 'force_refresh' });
+    this.setStatus('progress', 'Reloading app…');
+    globalThis.location?.reload();
   }
 
   fetchCrossRefs(bookId: number, chapter: number, verse: number): Promise<CrossRef[]> {
