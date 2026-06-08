@@ -223,11 +223,11 @@ export function ChapterView({
     <div ref={scrollRef} className="no-scrollbar"
       style={{ flex: 1, overflowY: 'auto', padding: '12px 14px 32px' }}>
       {loading ? (
-        <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-light)', fontFamily: 'DM Sans', fontSize: 13 }}>
+        <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-light)', fontFamily: 'DM Sans', fontSize: 'var(--fs-body)' }}>
           Loading…
         </div>
       ) : verses.length === 0 ? (
-        <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-light)', fontFamily: 'DM Sans', fontSize: 13 }}>
+        <div style={{ padding: 32, textAlign: 'center', color: 'var(--ink-light)', fontFamily: 'DM Sans', fontSize: 'var(--fs-body)' }}>
           No verses found.
         </div>
       ) : (
@@ -300,7 +300,7 @@ export function ChapterView({
                   )}
                 </div>
 
-                <span style={{ fontFamily: 'DM Serif Display', fontSize: 14, lineHeight: 1.6, color: 'var(--ink)', flex: 1 }}>
+                <span style={{ fontFamily: 'DM Serif Display', fontSize: 'var(--fs-verse)', lineHeight: 1.6, color: 'var(--ink)', flex: 1 }}>
                   {v.text}
                 </span>
 
@@ -329,7 +329,7 @@ export function ChapterView({
                       <span
                         onClick={() => onCrossRefClick?.(cr.targetBookId, cr.targetChapter, cr.targetVerseStart)}
                         style={{
-                          fontSize: 12, color: accentColor, fontFamily: 'DM Sans', fontWeight: 500,
+                          fontSize: 'var(--fs-meta)', color: accentColor, fontFamily: 'DM Sans', fontWeight: 500,
                           cursor: onCrossRefClick ? 'pointer' : 'default', textDecoration: 'underline',
                         }}
                       >
@@ -339,14 +339,14 @@ export function ChapterView({
                         <span style={{ fontSize: 10, color: 'var(--indigo)', fontWeight: 600 }}>★</span>
                       )}
                       {cr.userNote && (
-                        <span style={{ fontSize: 11, color: 'var(--ink-mid)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        <span style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-mid)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                           {cr.userNote}
                         </span>
                       )}
                     </div>
                   ))}
                   {verseCrossRefs.length > 10 && (
-                    <div style={{ fontSize: 11, color: 'var(--ink-light)' }}>+{verseCrossRefs.length - 10} more</div>
+                    <div style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-light)' }}>+{verseCrossRefs.length - 10} more</div>
                   )}
                   {onAddCrossRef && (
                     <div style={{ marginTop: 4 }}>
@@ -366,7 +366,7 @@ export function ChapterView({
                                 setAddingCrossRefVerse(null);
                               }
                             }}
-                            style={{ flex: 1, fontSize: 12, padding: '3px 6px', borderRadius: 5, border: `1px solid ${accentColor}`, outline: 'none', fontFamily: 'DM Sans' }}
+                            style={{ flex: 1, fontSize: 'var(--fs-meta)', padding: '3px 6px', borderRadius: 5, border: `1px solid ${accentColor}`, outline: 'none', fontFamily: 'DM Sans' }}
                           />
                           <button
                             onClick={() => {
@@ -376,13 +376,13 @@ export function ChapterView({
                                 setAddingCrossRefVerse(null);
                               }
                             }}
-                            style={{ padding: '3px 8px', borderRadius: 5, border: 'none', background: accentColor, color: '#fff', fontSize: 11, cursor: 'pointer' }}
+                            style={{ padding: '3px 8px', borderRadius: 5, border: 'none', background: accentColor, color: '#fff', fontSize: 'var(--fs-control)', cursor: 'pointer' }}
                           >Add</button>
                         </div>
                       ) : (
                         <button
                           onClick={() => { setAddingCrossRefVerse(v.verse); setCrossRefInput(''); }}
-                          style={{ fontSize: 11, color: accentColor, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          style={{ fontSize: 'var(--fs-control)', color: accentColor, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                         >+ Add cross-ref</button>
                       )}
                     </div>
@@ -397,7 +397,7 @@ export function ChapterView({
                 }}>
                   {hasBothCorpora && (
                     <div style={{
-                      fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+                      fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.08em',
                       color: 'var(--ink-light)', paddingLeft: 4, marginBottom: 2,
                       textTransform: 'uppercase' as const,
                     }}>
@@ -433,7 +433,7 @@ export function ChapterView({
           flex: 1, padding: '8px 0', borderRadius: 10, border: 'none',
           background: hasPrev ? accentBg : 'var(--parchment-mid)',
           color: hasPrev ? accentColor : 'var(--ink-light)',
-          fontFamily: 'DM Sans', fontSize: 13, fontWeight: 600,
+          fontFamily: 'DM Sans', fontSize: 'var(--fs-body)', fontWeight: 600,
           cursor: hasPrev ? 'pointer' : 'default',
         }}>
         ◀ {bookName} {currentChapter - 1}
@@ -443,7 +443,7 @@ export function ChapterView({
           flex: 1, padding: '8px 0', borderRadius: 10, border: 'none',
           background: hasNext ? accentBg : 'var(--parchment-mid)',
           color: hasNext ? accentColor : 'var(--ink-light)',
-          fontFamily: 'DM Sans', fontSize: 13, fontWeight: 600,
+          fontFamily: 'DM Sans', fontSize: 'var(--fs-body)', fontWeight: 600,
           cursor: hasNext ? 'pointer' : 'default',
         }}>
         {bookName} {currentChapter + 1} ▶

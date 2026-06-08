@@ -23,6 +23,7 @@ import type { CrossRef } from "./lib/db";
 import { getCrossRefsBulk } from "./lib/crossRefs";
 import { readThemePref, saveThemePref, initTheme, resolveTheme } from "./lib/theme";
 import type { ThemePref } from "./lib/theme";
+import { useFontSize } from "./lib/useFontSize";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -42,6 +43,9 @@ export default function App() {
   const [selectedLang, setSelectedLang] = useState<Lang | null>(null);
   const [activeBook, setActiveBook] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // ─── Font size ───────────────────────────────────────────────────────────
+  const [fontSizePref, setFontSizePref] = useFontSize();
 
   // ─── Theme ───────────────────────────────────────────────────────────────
   const [themePref, setThemePref] = useState<ThemePref>(() => readThemePref());
@@ -728,6 +732,8 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         themePref={themePref}
         onThemeChange={handleThemeChange}
+        fontSizePref={fontSizePref}
+        onFontSizeChange={setFontSizePref}
       />
     </div>
   );
