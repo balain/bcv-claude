@@ -50,7 +50,7 @@ export function GlossCard({ entry, lang, open, onToggle }: Props) {
         <span
           style={{
             fontFamily: 'serif',
-            fontSize: 18,
+            fontSize: 'var(--fs-gloss-lemma)',
             color: accent,
             fontWeight: 600,
             direction: isHeb ? 'rtl' : 'ltr',
@@ -64,7 +64,7 @@ export function GlossCard({ entry, lang, open, onToggle }: Props) {
         {entry.translit && (
           <span
             style={{
-              fontSize: 12,
+              fontSize: 'var(--fs-meta)',
               color: 'var(--ink-mid)',
               fontStyle: 'italic',
               fontFamily: 'DM Sans',
@@ -78,7 +78,7 @@ export function GlossCard({ entry, lang, open, onToggle }: Props) {
         {entry.gloss && (
           <span
             style={{
-              fontSize: 12,
+              fontSize: 'var(--fs-meta)',
               fontWeight: 600,
               color: accent,
               background: `${accent}18`,
@@ -116,7 +116,7 @@ export function GlossCard({ entry, lang, open, onToggle }: Props) {
         <div
           style={{
             padding: '0 14px 10px 23px',
-            fontSize: 13,
+            fontSize: 'var(--fs-gloss-body)',
             lineHeight: 1.6,
             color: 'var(--ink)',
             fontFamily: 'DM Sans',

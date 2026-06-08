@@ -47,7 +47,7 @@ export function WordChip({ word, lang, onTap }: Props) {
       <span
         style={{
           fontFamily: 'serif',
-          fontSize: isHeb ? 16 : 14,
+          fontSize: isHeb ? 'var(--fs-chip-heb)' : 'var(--fs-chip-grk)',
           lineHeight: 1.2,
           color: word.highlight ? hlColor : 'var(--ink)',
           fontWeight: word.highlight ? 600 : 400,
@@ -62,7 +62,7 @@ export function WordChip({ word, lang, onTap }: Props) {
         <span
           style={{
             ...subStyle,
-            fontSize: 9,
+            fontSize: 'var(--fs-chip-sub)',
             color: 'var(--ink-light)',
             fontStyle: 'italic',
             marginTop: 1,
@@ -77,7 +77,7 @@ export function WordChip({ word, lang, onTap }: Props) {
         <span
           style={{
             ...subStyle,
-            fontSize: 10,
+            fontSize: 'var(--fs-chip-gloss)',
             color: word.highlight ? hlColor : 'var(--ink-mid)',
             fontWeight: word.highlight ? 600 : 400,
             marginTop: 1,

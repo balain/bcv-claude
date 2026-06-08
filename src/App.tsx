@@ -23,6 +23,7 @@ import type { CrossRef } from "./lib/db";
 import { getCrossRefsBulk } from "./lib/crossRefs";
 import { readThemePref, saveThemePref, initTheme, resolveTheme } from "./lib/theme";
 import type { ThemePref } from "./lib/theme";
+import { useFontSize } from "./lib/useFontSize";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -42,6 +43,9 @@ export default function App() {
   const [selectedLang, setSelectedLang] = useState<Lang | null>(null);
   const [activeBook, setActiveBook] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // ─── Font size ───────────────────────────────────────────────────────────
+  const [fontSizePref, setFontSizePref] = useFontSize();
 
   // ─── Theme ───────────────────────────────────────────────────────────────
   const [themePref, setThemePref] = useState<ThemePref>(() => readThemePref());
@@ -366,7 +370,7 @@ export default function App() {
         <span
           style={{
             fontFamily: "Playfair Display",
-            fontSize: 17,
+            fontSize: "var(--fs-heading)",
             fontWeight: 700,
             color: "#fff",
             letterSpacing: "-0.02em",
@@ -382,7 +386,7 @@ export default function App() {
               style={{
                 background: showChart ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.1)",
                 border: "none", borderRadius: 8, padding: "5px 8px",
-                color: "#fff", fontSize: 14, cursor: "pointer",
+                color: "#fff", fontSize: "var(--fs-body)", cursor: "pointer",
               }}
               aria-label="Toggle distribution chart"
             >📊</button>
@@ -413,7 +417,7 @@ export default function App() {
                 style={{
                   background: mode === m ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)",
                   border: "none", borderRadius: 8, padding: "5px 8px",
-                  color: "#fff", fontSize: 14, cursor: "pointer",
+                  color: "#fff", fontSize: "var(--fs-body)", cursor: "pointer",
                   fontWeight: mode === m ? 700 : 400,
                 }}
               >
@@ -430,7 +434,7 @@ export default function App() {
               background: "rgba(255,255,255,0.1)",
               border: "none", borderRadius: 8, padding: "5px 8px",
               color: refreshing ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.7)",
-              fontSize: 14, cursor: refreshing ? "default" : "pointer",
+              fontSize: "var(--fs-body)", cursor: refreshing ? "default" : "pointer",
               transition: "color 0.2s", display: "inline-flex",
               alignItems: "center", justifyContent: "center",
             }}
@@ -446,7 +450,7 @@ export default function App() {
               background: "rgba(255,255,255,0.1)",
               border: "none", borderRadius: 8, padding: "5px 8px",
               color: "rgba(255,255,255,0.7)",
-              fontSize: 14, cursor: "pointer",
+              fontSize: "var(--fs-body)", cursor: "pointer",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
             }}
           >⚙</button>
@@ -512,7 +516,7 @@ export default function App() {
               <span
                 style={{
                   fontFamily: "Playfair Display",
-                  fontSize: 19,
+                  fontSize: "var(--fs-heading)",
                   fontWeight: 700,
                   color: "var(--ink)",
                   letterSpacing: "-0.02em",
@@ -522,7 +526,7 @@ export default function App() {
               </span>
               <span
                 style={{
-                  fontSize: 13,
+                  fontSize: "var(--fs-body)",
                   color: "var(--ink-light)",
                   fontFamily: "DM Sans",
                 }}
@@ -534,7 +538,7 @@ export default function App() {
               {!isLoading && results.length >= 200 && (
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: "var(--fs-meta)",
                     color: "var(--amber)",
                     fontFamily: "DM Sans",
                     fontWeight: 600,
@@ -552,7 +556,7 @@ export default function App() {
                   textAlign: "center",
                   color: "var(--ink-light)",
                   fontFamily: "DM Sans",
-                  fontSize: 13,
+                  fontSize: "var(--fs-body)",
                 }}
               >
                 {dbMessage || "Initializing database…"}
@@ -600,7 +604,7 @@ export default function App() {
                       textAlign: "center",
                       color: "var(--ink-light)",
                       fontFamily: "DM Sans",
-                      fontSize: 13,
+                      fontSize: "var(--fs-body)",
                     }}
                   >
                     No results.
@@ -668,7 +672,7 @@ export default function App() {
             color: "#fff",
             border: "none",
             cursor: "pointer",
-            fontSize: 18,
+            fontSize: "var(--fs-gloss-lemma)",
             lineHeight: 1,
             boxShadow: "0 4px 14px rgba(0,0,0,0.28)",
             display: "flex",
@@ -728,6 +732,8 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         themePref={themePref}
         onThemeChange={handleThemeChange}
+        fontSizePref={fontSizePref}
+        onFontSizeChange={setFontSizePref}
       />
     </div>
   );

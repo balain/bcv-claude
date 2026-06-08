@@ -132,7 +132,7 @@ export function SessionList({ onOpen }: Props) {
             />
           </label>
           {createError && (
-            <p style={{ color: 'var(--error, #c0392b)', fontSize: 13, margin: '0 0 4px' }}>
+            <p style={{ color: 'var(--error, #c0392b)', fontSize: 'var(--fs-body)', margin: '0 0 4px' }}>
               {createError}
             </p>
           )}

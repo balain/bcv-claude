@@ -1,10 +1,13 @@
 import type { ThemePref } from '../lib/theme';
+import type { FontSizePref } from '../lib/useFontSize';
 
 interface Props {
   open: boolean;
   onClose: () => void;
   themePref: ThemePref;
   onThemeChange: (pref: ThemePref) => void;
+  fontSizePref: FontSizePref;
+  onFontSizeChange: (pref: FontSizePref) => void;
 }
 
 const THEME_OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
@@ -13,7 +16,14 @@ const THEME_OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
   { value: 'dark',   label: 'Dark',   icon: '🌙' },
 ];
 
-export function SettingsPanel({ open, onClose, themePref, onThemeChange }: Props) {
+const FONT_SIZE_OPTIONS: { value: FontSizePref; label: string; icon: string }[] = [
+  { value: 'small',       label: 'Small',   icon: 'A' },
+  { value: 'medium',      label: 'Default', icon: 'A' },
+  { value: 'large',       label: 'Large',   icon: 'A' },
+  { value: 'extra-large', label: 'X-Large', icon: 'A' },
+];
+
+export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSizePref, onFontSizeChange }: Props) {
   if (!open) return null;
 
   return (
@@ -71,7 +81,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange }: Props
           <span
             style={{
               fontFamily: 'Playfair Display',
-              fontSize: 18,
+              fontSize: 'var(--fs-gloss-lemma)',
               fontWeight: 700,
               color: 'var(--ink)',
               letterSpacing: '-0.02em',
@@ -89,7 +99,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange }: Props
               border: 'none',
               background: 'var(--surface-muted)',
               color: 'var(--ink-light)',
-              fontSize: 14,
+              fontSize: 'var(--fs-body)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -107,7 +117,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange }: Props
         <div style={{ padding: '16px 20px 0' }}>
           <div
             style={{
-              fontSize: 11,
+              fontSize: 'var(--fs-control)',
               fontWeight: 700,
               letterSpacing: '0.07em',
               textTransform: 'uppercase',
@@ -146,13 +156,74 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange }: Props
                     background: isActive ? 'var(--indigo-bg)' : 'var(--surface-muted)',
                     color: isActive ? 'var(--indigo)' : 'var(--ink-mid)',
                     cursor: 'pointer',
-                    fontSize: 11,
+                    fontSize: 'var(--fs-control)',
                     fontWeight: isActive ? 700 : 500,
                     fontFamily: 'DM Sans',
                     transition: 'border-color 0.15s, background 0.15s, color 0.15s',
                   }}
                 >
-                  <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
+                  <span style={{ fontSize: 'var(--fs-gloss-lemma)', lineHeight: 1 }}>{icon}</span>
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ margin: '12px 20px 0', borderTop: '1px solid var(--border)' }} />
+
+        {/* Font size section */}
+        <div style={{ padding: '16px 20px 0' }}>
+          <div
+            style={{
+              fontSize: 'var(--fs-control)',
+              fontWeight: 700,
+              letterSpacing: '0.07em',
+              textTransform: 'uppercase',
+              color: 'var(--ink-light)',
+              marginBottom: 10,
+              fontFamily: 'DM Sans',
+            }}
+          >
+            Font Size
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label="Font size preference"
+            style={{ display: 'flex', gap: 8 }}
+          >
+            {FONT_SIZE_OPTIONS.map(({ value, label, icon }, idx) => {
+              const isActive = fontSizePref === value;
+              const iconSizes = [13, 15, 18, 21];
+              return (
+                <button
+                  key={value}
+                  role="radio"
+                  aria-checked={isActive}
+                  onClick={() => onFontSizeChange(value)}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '10px 8px',
+                    borderRadius: 10,
+                    border: isActive
+                      ? '2px solid var(--indigo)'
+                      : '2px solid var(--border)',
+                    background: isActive ? 'var(--indigo-bg)' : 'var(--surface-muted)',
+                    color: isActive ? 'var(--indigo)' : 'var(--ink-mid)',
+                    cursor: 'pointer',
+                    fontSize: 'var(--fs-control)',
+                    fontWeight: isActive ? 700 : 500,
+                    fontFamily: 'DM Sans',
+                    transition: 'border-color 0.15s, background 0.15s, color 0.15s',
+                  }}
+                >
+                  <span style={{ fontSize: iconSizes[idx], lineHeight: 1, fontFamily: 'serif' }}>{icon}</span>
                   <span>{label}</span>
                 </button>
               );

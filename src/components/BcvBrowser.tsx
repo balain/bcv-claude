@@ -119,7 +119,7 @@ export function BcvBrowser({
             display: 'flex', alignItems: 'center', gap: 6,
             padding: '7px 14px', background: 'var(--indigo-bg)',
             border: 'none', borderBottom: '1px solid var(--border)',
-            color: 'var(--indigo)', fontSize: 13, fontFamily: 'DM Sans',
+            color: 'var(--indigo)', fontSize: 'var(--fs-body)', fontFamily: 'DM Sans',
             fontWeight: 600, cursor: 'pointer', flexShrink: 0, textAlign: 'left',
           }}
         >
@@ -143,7 +143,7 @@ export function BcvBrowser({
           style={{
             flex: 1, padding: '7px 10px', borderRadius: 8,
             border: `1px solid ${parseError ? 'var(--amber)' : 'var(--border)'}`,
-            background: 'var(--surface)', fontSize: 14, fontFamily: 'DM Sans',
+            background: 'var(--surface)', fontSize: 'var(--fs-body)', fontFamily: 'DM Sans',
             color: 'var(--ink)', outline: 'none',
           }}
           aria-label="Passage reference"
@@ -153,7 +153,7 @@ export function BcvBrowser({
           style={{
             padding: '7px 14px', borderRadius: 8, border: 'none',
             background: 'var(--navy)', color: '#fff',
-            fontSize: 13, fontFamily: 'DM Sans', fontWeight: 600, cursor: 'pointer',
+            fontSize: 'var(--fs-body)', fontFamily: 'DM Sans', fontWeight: 600, cursor: 'pointer',
           }}
         >Go</button>
         <button
@@ -164,19 +164,19 @@ export function BcvBrowser({
             padding: '7px 10px', borderRadius: 8, border: 'none',
             background: bookmarksOpen ? 'var(--navy)' : 'var(--parchment-mid)',
             color: bookmarksOpen ? '#fff' : 'var(--ink-light)',
-            fontSize: 14, cursor: 'pointer',
+            fontSize: 'var(--fs-body)', cursor: 'pointer',
           }}
         >
           {bookmarks.length > 0 ? '★' : '☆'}
           {bookmarks.length > 0 && (
-            <span style={{ fontSize: 10, marginLeft: 3 }}>{bookmarks.length}</span>
+            <span style={{ fontSize: 'var(--fs-badge)', marginLeft: 3 }}>{bookmarks.length}</span>
           )}
         </button>
       </div>
 
       {parseError && (
         <div style={{
-          padding: '4px 12px', fontSize: 12, color: 'var(--amber)',
+          padding: '4px 12px', fontSize: 'var(--fs-meta)', color: 'var(--amber)',
           fontFamily: 'DM Sans', background: 'var(--parchment)', flexShrink: 0,
         }}>
           {parseError}
@@ -190,7 +190,7 @@ export function BcvBrowser({
           padding: '8px 12px', flexShrink: 0, maxHeight: 180, overflowY: 'auto',
         }}>
           {bookmarks.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--ink-light)', fontFamily: 'DM Sans', margin: 0 }}>
+            <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--ink-light)', fontFamily: 'DM Sans', margin: 0 }}>
               No bookmarks yet. Use ☆ on any verse to save one.
             </p>
           ) : (
@@ -204,7 +204,7 @@ export function BcvBrowser({
                     onClick={() => { onNavigate(bm.bookId, bm.chapter, bm.verse); setBookmarksOpen(false); }}
                     style={{
                       flex: 1, textAlign: 'left', background: 'none', border: 'none',
-                      cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans',
+                      cursor: 'pointer', fontSize: 'var(--fs-body)', fontFamily: 'DM Sans',
                       color: 'var(--ink)', padding: '2px 0',
                     }}
                   >
@@ -215,7 +215,7 @@ export function BcvBrowser({
                     aria-label={`Remove bookmark ${bm.label}`}
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
-                      color: 'var(--ink-light)', fontSize: 14, padding: '2px 4px',
+                      color: 'var(--ink-light)', fontSize: 'var(--fs-body)', padding: '2px 4px',
                     }}
                   >×</button>
                 </li>
@@ -236,7 +236,7 @@ export function BcvBrowser({
         }}>
           {!compact && (
             <p style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+              fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.08em',
               color: 'var(--ink-light)', textTransform: 'uppercase',
               fontFamily: 'DM Sans', margin: '0 0 6px',
             }}>Old Testament</p>
@@ -251,7 +251,7 @@ export function BcvBrowser({
                   borderRadius: 6, border: 'none',
                   background: selectedBookId === b.id ? accentOT : 'var(--amber-bg)',
                   color: selectedBookId === b.id ? '#fff' : 'var(--ink)',
-                  fontSize: compact ? 10 : 12, fontFamily: 'DM Sans',
+                  fontSize: compact ? 'var(--fs-badge)' : 'var(--fs-meta)', fontFamily: 'DM Sans',
                   fontWeight: selectedBookId === b.id ? 700 : 400,
                   cursor: 'pointer',
                 }}
@@ -262,7 +262,7 @@ export function BcvBrowser({
           </div>
           {!compact && (
             <p style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+              fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.08em',
               color: 'var(--ink-light)', textTransform: 'uppercase',
               fontFamily: 'DM Sans', margin: '8px 0 6px',
             }}>New Testament</p>
@@ -277,7 +277,7 @@ export function BcvBrowser({
                   borderRadius: 6, border: 'none',
                   background: selectedBookId === b.id ? accentNT : 'var(--indigo-bg)',
                   color: selectedBookId === b.id ? '#fff' : 'var(--ink)',
-                  fontSize: compact ? 10 : 12, fontFamily: 'DM Sans',
+                  fontSize: compact ? 'var(--fs-badge)' : 'var(--fs-meta)', fontFamily: 'DM Sans',
                   fontWeight: selectedBookId === b.id ? 700 : 400,
                   cursor: 'pointer',
                 }}
@@ -296,7 +296,7 @@ export function BcvBrowser({
           return (
             <div style={{ padding: '10px 12px' }}>
               <p style={{
-                fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+                fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.08em',
                 color: 'var(--ink-light)', textTransform: 'uppercase',
                 fontFamily: 'DM Sans', margin: '0 0 8px',
               }}>
@@ -310,7 +310,7 @@ export function BcvBrowser({
                     style={{
                       width: 36, height: 36, borderRadius: 8, border: 'none',
                       background: accentBg, color: accent,
-                      fontSize: 13, fontFamily: 'DM Sans', fontWeight: 600,
+                      fontSize: 'var(--fs-body)', fontFamily: 'DM Sans', fontWeight: 600,
                       cursor: 'pointer',
                     }}
                   >

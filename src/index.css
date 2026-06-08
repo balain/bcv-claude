@@ -133,3 +133,82 @@ button { font-family: inherit; }
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+
+/* ── Typography scale — controlled by data-font-size on <html> ──────────── */
+/* Medium = current app baseline; no override block needed for medium.       */
+/* Override blocks use html[data-font-size="..."] to match [data-theme] pattern. */
+:root {
+  --fs-body:        13px;  /* general body text, result refs, history */
+  --fs-verse:       14px;  /* verse text in ChapterView and ResultCard */
+  --fs-meta:        12px;  /* secondary metadata, cross-ref items */
+  --fs-control:     11px;  /* labels, controls, collapsed headers */
+  --fs-badge:       10px;  /* small uppercase badge labels */
+  --fs-chip-heb:    16px;  /* Hebrew word surface form */
+  --fs-chip-grk:    14px;  /* Greek word surface form */
+  --fs-chip-sub:     9px;  /* chip transliteration line */
+  --fs-chip-gloss:  10px;  /* chip English gloss line */
+  --fs-def-surface: 32px;  /* DefinitionSheet large surface form */
+  --fs-def-lemma:   17px;  /* DefinitionSheet lemma row */
+  --fs-def-row:     14px;  /* DefinitionSheet content rows */
+  --fs-gloss-lemma: 18px;  /* GlossCard lemma header */
+  --fs-gloss-body:  13px;  /* GlossCard expanded body */
+  --fs-input:       16px;  /* search input text */
+  --fs-heading:     19px;  /* query heading in search results */
+}
+
+html[data-font-size="small"] {
+  --fs-body:        11px;
+  --fs-verse:       12px;
+  --fs-meta:        10px;
+  --fs-control:     10px;
+  --fs-badge:        9px;
+  --fs-chip-heb:    14px;
+  --fs-chip-grk:    12px;
+  --fs-chip-sub:     8px;
+  --fs-chip-gloss:   9px;
+  --fs-def-surface: 27px;
+  --fs-def-lemma:   14px;
+  --fs-def-row:     12px;
+  --fs-gloss-lemma: 15px;
+  --fs-gloss-body:  11px;
+  --fs-input:       14px;
+  --fs-heading:     16px;
+}
+
+html[data-font-size="large"] {
+  --fs-body:        15px;
+  --fs-verse:       16px;
+  --fs-meta:        14px;
+  --fs-control:     13px;
+  --fs-badge:       11px;
+  --fs-chip-heb:    18px;
+  --fs-chip-grk:    16px;
+  --fs-chip-sub:    10px;
+  --fs-chip-gloss:  11px;
+  --fs-def-surface: 37px;
+  --fs-def-lemma:   20px;
+  --fs-def-row:     16px;
+  --fs-gloss-lemma: 21px;
+  --fs-gloss-body:  15px;
+  --fs-input:       18px;
+  --fs-heading:     22px;
+}
+
+html[data-font-size="extra-large"] {
+  --fs-body:        17px;
+  --fs-verse:       18px;
+  --fs-meta:        15px;
+  --fs-control:     14px;
+  --fs-badge:       12px;
+  --fs-chip-heb:    21px;
+  --fs-chip-grk:    18px;
+  --fs-chip-sub:    11px;
+  --fs-chip-gloss:  13px;
+  --fs-def-surface: 42px;
+  --fs-def-lemma:   22px;
+  --fs-def-row:     18px;
+  --fs-gloss-lemma: 23px;
+  --fs-gloss-body:  17px;
+  --fs-input:       21px;
+  --fs-heading:     25px;
+}

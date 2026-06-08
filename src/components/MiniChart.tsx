@@ -23,7 +23,7 @@ export function MiniChart({ visible, bars, totalHits }: Props) {
     >
       <div
         style={{
-          fontSize: 9,
+          fontSize: 'var(--fs-chip-sub)',
           color: 'var(--ink-light)',
           marginBottom: 4,
           letterSpacing: '0.04em',
@@ -53,8 +53,8 @@ export function MiniChart({ visible, bars, totalHits }: Props) {
         ))}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-        <span style={{ fontSize: 9, color: 'var(--ink-light)' }}>OT</span>
-        <span style={{ fontSize: 9, color: 'var(--ink-light)' }}>NT</span>
+        <span style={{ fontSize: 'var(--fs-chip-sub)', color: 'var(--ink-light)' }}>OT</span>
+        <span style={{ fontSize: 'var(--fs-chip-sub)', color: 'var(--ink-light)' }}>NT</span>
       </div>
     </div>
   );

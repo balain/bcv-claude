@@ -57,11 +57,11 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
             cursor: 'pointer',
           }}
         >
-          <span style={{ fontSize: 13, color: 'var(--ink-light)' }}>🔍</span>
-          <span style={{ fontSize: 14, color: 'var(--ink)', fontWeight: 500 }}>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--ink-light)' }}>🔍</span>
+          <span style={{ fontSize: 'var(--fs-body)', color: 'var(--ink)', fontWeight: 500 }}>
             {query || '—'}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--ink-light)', marginLeft: 4 }}>
+          <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--ink-light)', marginLeft: 4 }}>
             · {source}
           </span>
         </div>
@@ -71,7 +71,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
             background: 'none',
             border: 'none',
             color: 'var(--indigo)',
-            fontSize: 13,
+            fontSize: 'var(--fs-body)',
             fontWeight: 600,
             cursor: 'pointer',
             fontFamily: 'DM Sans',
@@ -107,14 +107,14 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
             boxShadow: 'var(--focus-ring)',
           }}
         >
-          <span style={{ fontSize: 14, color: 'var(--ink-light)' }}>🔍</span>
+          <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--ink-light)' }}>🔍</span>
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
             style={{
               flex: 1,
-              fontSize: 16,
+              fontSize: 'var(--fs-input)',
               color: 'var(--ink)',
               fontWeight: 500,
               border: 'none',
@@ -128,7 +128,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
           {draft && (
             <span
               onClick={() => setDraft('')}
-              style={{ fontSize: 13, color: 'var(--ink-light)', cursor: 'pointer' }}
+              style={{ fontSize: 'var(--fs-body)', color: 'var(--ink-light)', cursor: 'pointer' }}
             >
               ✕
             </span>
@@ -142,7 +142,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
             border: 'none',
             borderRadius: 10,
             padding: '7px 13px',
-            fontSize: 13,
+            fontSize: 'var(--fs-body)',
             fontWeight: 600,
             fontFamily: 'DM Sans',
             cursor: 'pointer',
@@ -175,7 +175,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
                   onGo(draft, id);
                 }}
                 style={{
-                  fontSize: 11,
+                  fontSize: 'var(--fs-control)',
                   fontWeight: 600,
                   fontFamily: 'DM Sans',
                   padding: '3px 9px',
@@ -207,7 +207,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
           <span
             style={{
               display: 'inline-block',
-              fontSize: 11,
+              fontSize: 'var(--fs-control)',
               fontWeight: 600,
               fontFamily: 'DM Sans',
               color: 'var(--indigo)',
@@ -229,7 +229,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
           background: 'none',
           border: 'none',
           color: 'var(--ink-light)',
-          fontSize: 12,
+          fontSize: 'var(--fs-meta)',
           cursor: 'pointer',
           fontFamily: 'DM Sans',
           marginTop: 6,

@@ -117,7 +117,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
               onClick={() => { if (word.lemma) { onSearch(word.lemma, origSource); onClose(); } }}
               disabled={!word.lemma}
               style={{
-                fontSize: 12,
+                fontSize: 'var(--fs-meta)',
                 fontWeight: 600,
                 color: accentColor,
                 background: isHeb ? 'var(--amber-bg)' : 'var(--indigo-bg)',
@@ -135,7 +135,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
               onClick={() => { if (word.surface) { onSearch(word.surface, origSource); onClose(); } }}
               disabled={!word.surface}
               style={{
-                fontSize: 12,
+                fontSize: 'var(--fs-meta)',
                 fontWeight: 600,
                 color: 'var(--ink-light)',
                 background: 'var(--parchment-mid)',
@@ -180,7 +180,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
           <div
             style={{
               fontFamily: 'serif',
-              fontSize: 32,
+              fontSize: 'var(--fs-def-surface)',
               color: accentColor,
               fontWeight: 600,
               direction: isHeb ? 'rtl' : 'ltr',
@@ -191,7 +191,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
           </div>
           <div
             style={{
-              fontSize: 13,
+              fontSize: 'var(--fs-meta)',
               color: 'var(--ink-mid)',
               marginTop: 4,
               fontFamily: 'DM Sans',
@@ -203,7 +203,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
           {meaning && (
             <div
               style={{
-                fontSize: 14,
+                fontSize: 'var(--fs-def-row)',
                 color: 'var(--ink)',
                 marginTop: 8,
                 fontFamily: 'DM Sans',
@@ -232,7 +232,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
                 >
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 'var(--fs-control)',
                       fontWeight: 600,
                       letterSpacing: '0.06em',
                       color: 'var(--ink-light)',
@@ -247,7 +247,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
                     style={{
                       color: 'var(--ink)',
                       fontFamily: label === 'Lemma' ? 'serif' : 'DM Sans',
-                      fontSize: label === 'Lemma' ? 17 : 14,
+                      fontSize: label === 'Lemma' ? 'var(--fs-def-lemma)' : 'var(--fs-def-row)',
                       direction: label === 'Lemma' && isHeb ? 'rtl' : 'ltr',
                     }}
                   >

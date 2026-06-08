@@ -86,7 +86,7 @@ export function ResultCard({
     >
       {hasBoth && (
         <div style={{
-          fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+          fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.08em',
           color: 'var(--ink-light)', paddingLeft: 4, marginBottom: 2,
           textTransform: 'uppercase' as const,
         }}>
@@ -133,7 +133,7 @@ export function ResultCard({
             <span
               onClick={(e) => { e.stopPropagation(); onRefClick(result); }}
               style={{
-                fontSize: 13, fontWeight: 600, color: accentColor,
+                fontSize: 'var(--fs-body)', fontWeight: 600, color: accentColor,
                 fontFamily: 'DM Sans', letterSpacing: '-0.01em',
                 cursor: 'pointer',
               }}
@@ -141,7 +141,7 @@ export function ResultCard({
               {result.ref}
             </span>
             <span style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: '0.05em',
+              fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.05em',
               color: '#fff', background: badgeColor,
               borderRadius: 4, padding: '1px 5px',
             }}>
@@ -150,7 +150,7 @@ export function ResultCard({
           </div>
           {!expanded && (
             <div style={{
-              fontSize: 12, color: 'var(--ink-mid)', marginTop: 1,
+              fontSize: 'var(--fs-meta)', color: 'var(--ink-mid)', marginTop: 1,
               fontFamily: 'DM Serif Display', lineHeight: 1.3, fontStyle: 'italic',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
@@ -192,7 +192,7 @@ export function ResultCard({
         <>
           {/* English verse text */}
           <div style={{ padding: '6px 10px 4px' }}>
-            <p style={{ fontFamily: 'DM Serif Display', fontSize: 13, lineHeight: 1.55, color: 'var(--ink)' }}>
+            <p style={{ fontFamily: 'DM Serif Display', fontSize: 'var(--fs-verse)', lineHeight: 1.55, color: 'var(--ink)' }}>
               {renderEngText(result.english, result.matchWord)}
             </p>
           </div>
@@ -209,7 +209,7 @@ export function ResultCard({
                 <div style={{
                   borderTop: '1px solid var(--border)',
                   padding: '5px 12px',
-                  fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+                  fontSize: 'var(--fs-control)', fontWeight: 600, letterSpacing: '0.06em',
                   color: 'var(--ink-light)', textTransform: 'uppercase' as const,
                   background: 'var(--parchment-mid)',
                 }}>
@@ -229,7 +229,7 @@ export function ResultCard({
                   padding: '4px 10px', cursor: 'pointer',
                 }}
               >
-                <span style={{ fontSize: 11, color: 'var(--ink-light)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' as const, flex: 1 }}>
+                <span style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-light)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' as const, flex: 1 }}>
                   Cross-refs {crossRefs && crossRefs.length > 0 ? `(${crossRefs.length})` : ''}
                 </span>
                 {onAddCrossRef && (
@@ -290,7 +290,7 @@ export function ResultCard({
                       <span
                         onClick={() => onCrossRefClick?.(cr.targetBookId, cr.targetChapter, cr.targetVerseStart)}
                         style={{
-                          fontSize: 12, color: accentColor, cursor: onCrossRefClick ? 'pointer' : 'default',
+                          fontSize: 'var(--fs-meta)', color: accentColor, cursor: onCrossRefClick ? 'pointer' : 'default',
                           fontFamily: 'DM Sans', fontWeight: 500, textDecoration: 'underline',
                         }}
                       >
@@ -312,7 +312,7 @@ export function ResultCard({
                     </div>
                   ))}
                   {crossRefs.length > MAX_CROSS_REFS_VISIBLE && (
-                    <div style={{ fontSize: 11, color: 'var(--ink-light)', paddingTop: 2 }}>
+                    <div style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-light)', paddingTop: 2 }}>
                       +{crossRefs.length - MAX_CROSS_REFS_VISIBLE} more
                     </div>
                   )}
