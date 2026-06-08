@@ -61,6 +61,8 @@ export function ChapterView({
   const [expandedCrossRefVerse, setExpandedCrossRefVerse] = useState<number | null>(null);
   const [addingCrossRefVerse, setAddingCrossRefVerse] = useState<number | null>(null);
   const [crossRefInput, setCrossRefInput] = useState('');
+  const [expandedSections, setExpandedSections] = useState<Map<string, boolean>>(new Map());
+  const prevOriginalsOpenRef = useRef(false);
 
   const highlightRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -85,6 +87,7 @@ export function ChapterView({
     setCrossRefsByVerse(new Map());
     setExpandedCrossRefVerse(null);
     setAddingCrossRefVerse(null);
+    setExpandedSections(new Map());
     Promise.all([
       dbClient.fetchChapter(abbr3, currentChapter),
       dbClient.fetchChapterOriginals(abbr3, currentChapter, testament),
@@ -120,12 +123,50 @@ export function ChapterView({
     setCurrentHighlight(0);
   };
 
+  // Reset expanded sections when originalsOpen transitions from true → false
+  useEffect(() => {
+    if (prevOriginalsOpenRef.current && !originalsOpen) {
+      setExpandedSections(new Map());
+    }
+    prevOriginalsOpenRef.current = originalsOpen;
+  }, [originalsOpen]);
+
   // Build a verse → originals map for efficient lookup in render
   const originalsByVerse = useMemo(() => {
     const map = new Map<number, ChapterVerseOriginals['originals']>();
     for (const item of verseOriginals) map.set(item.verse, item.originals);
     return map;
   }, [verseOriginals]);
+
+  // All verse:corpus keys in the chapter — used for expand-all / collapse-all
+  const allCorpusKeys = useMemo(() => {
+    const keys: string[] = [];
+    for (const item of verseOriginals) {
+      for (const section of item.originals) {
+        keys.push(`${item.verse}:${section.corpus}`);
+      }
+    }
+    return keys;
+  }, [verseOriginals]);
+
+  const toggleSection = (verse: number, corpus: string) => {
+    const key = `${verse}:${corpus}`;
+    setExpandedSections((prev) => {
+      const next = new Map(prev);
+      next.set(key, !prev.get(key));
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    setExpandedSections(() => {
+      const next = new Map<string, boolean>();
+      for (const key of allCorpusKeys) next.set(key, true);
+      return next;
+    });
+  };
+
+  const collapseAll = () => setExpandedSections(new Map());
 
   const hasPrev = currentChapter > 1;
   const hasNext = totalChapters !== null && currentChapter < totalChapters;
@@ -201,21 +242,54 @@ export function ChapterView({
       fontSize: 10, fontWeight: 600, letterSpacing: '0.07em',
       color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' as const,
       flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      position: 'sticky', top: 0, zIndex: 10,
     }}>
       <span>NASB</span>
-      <button
-        onClick={() => setOriginalsOpen((v) => !v)}
-        style={{
-          background: originalsOpen ? `${accentColor}30` : 'rgba(255,255,255,0.08)',
-          border: 'none', borderRadius: 6, padding: '2px 8px',
-          color: originalsOpen ? accentColor : 'rgba(255,255,255,0.5)',
-          fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-          cursor: 'pointer', textTransform: 'uppercase' as const, fontFamily: 'DM Sans',
-        }}
-        aria-label={originalsOpen ? 'Hide original language' : 'Show original language'}
-      >
-        {originalsLabel} {originalsOpen ? '▼' : '▶'}
-      </button>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {originalsOpen && allCorpusKeys.length > 0 && (
+          <>
+            <button
+              onClick={expandAll}
+              aria-label="Expand all original language sections"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: 'none', borderRadius: 6, padding: '2px 8px',
+                color: 'rgba(255,255,255,0.6)',
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+                cursor: 'pointer', textTransform: 'uppercase' as const, fontFamily: 'DM Sans',
+              }}
+            >
+              Expand all
+            </button>
+            <button
+              onClick={collapseAll}
+              aria-label="Collapse all original language sections"
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: 'none', borderRadius: 6, padding: '2px 8px',
+                color: 'rgba(255,255,255,0.6)',
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+                cursor: 'pointer', textTransform: 'uppercase' as const, fontFamily: 'DM Sans',
+              }}
+            >
+              Collapse all
+            </button>
+          </>
+        )}
+        <button
+          onClick={() => setOriginalsOpen((v) => !v)}
+          style={{
+            background: originalsOpen ? `${accentColor}30` : 'rgba(255,255,255,0.08)',
+            border: 'none', borderRadius: 6, padding: '2px 8px',
+            color: originalsOpen ? accentColor : 'rgba(255,255,255,0.5)',
+            fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+            cursor: 'pointer', textTransform: 'uppercase' as const, fontFamily: 'DM Sans',
+          }}
+          aria-label={originalsOpen ? 'Hide original language' : 'Show original language'}
+        >
+          {originalsLabel} {originalsOpen ? '▼' : '▶'}
+        </button>
+      </div>
     </div>
   );
 
@@ -234,7 +308,6 @@ export function ChapterView({
         verses.map((v) => {
           const isHighlight = v.verse === currentHighlight;
           const originals = originalsByVerse.get(v.verse) ?? [];
-          const hasBothCorpora = originals.length > 1;
           const hasNote = versesWithNotes?.has(v.verse) ?? false;
           const bookmarked = isBookmarked?.(bookId, currentChapter, v.verse) ?? false;
 
@@ -390,32 +463,62 @@ export function ChapterView({
                 </div>
               )}
 
-              {originalsOpen && originals.length > 0 && originals.map((section) => (
-                <div key={section.corpus} style={{
-                  background: section.lang === 'Heb' ? 'var(--orig-heb-bg)' : 'var(--orig-grk-bg)',
-                  borderTop: '1px solid var(--border)', padding: '4px 8px 3px',
-                }}>
-                  {hasBothCorpora && (
-                    <div style={{
-                      fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
-                      color: 'var(--ink-light)', paddingLeft: 4, marginBottom: 2,
-                      textTransform: 'uppercase' as const,
-                    }}>
-                      {SECTION_LABEL[section.corpus]}
-                    </div>
-                  )}
-                  <div style={{
-                    display: 'flex', flexWrap: 'wrap' as const,
-                    flexDirection: (section.lang === 'Heb' ? 'row-reverse' : 'row') as 'row-reverse' | 'row',
-                    gap: 0,
+              {originalsOpen && originals.length > 0 && originals.map((section) => {
+                const sectionKey = `${v.verse}:${section.corpus}`;
+                const isExpanded = expandedSections.get(sectionKey) ?? false;
+                const corpusLabel = SECTION_LABEL[section.corpus] ?? section.corpus;
+                const ariaLabel = isExpanded
+                  ? `Hide ${corpusLabel} for ${bookName} ${currentChapter}:${v.verse}`
+                  : `Show ${corpusLabel} for ${bookName} ${currentChapter}:${v.verse}`;
+
+                return (
+                  <div key={section.corpus} style={{
+                    background: section.lang === 'Heb' ? 'var(--orig-heb-bg)' : 'var(--orig-grk-bg)',
+                    borderTop: '1px solid var(--border)',
                   }}>
-                    {section.tokens.map((w, i) => (
-                      <WordChip key={i} word={w as WordToken} lang={section.lang}
-                        onTap={(word) => { setSelectedWord(word); setSelectedLang(section.lang); }} />
-                    ))}
+                    {/* Accordion toggle row */}
+                    <button
+                      onClick={() => toggleSection(v.verse, section.corpus)}
+                      aria-expanded={isExpanded}
+                      aria-label={ariaLabel}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '4px 12px',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        textAlign: 'left' as const,
+                        outline: 'none',
+                      }}
+                    >
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, letterSpacing: '0.08em',
+                        color: 'var(--ink-light)', textTransform: 'uppercase' as const, flex: 1,
+                        fontFamily: 'DM Sans',
+                      }}>
+                        {corpusLabel}
+                      </span>
+                      <span style={{ fontSize: 10, color: 'var(--ink-light)' }}>
+                        {isExpanded ? '▼' : '▶'}
+                      </span>
+                    </button>
+
+                    {/* Word chips — shown only when expanded */}
+                    {isExpanded && (
+                      <div style={{ padding: '0 8px 4px' }}>
+                        <div style={{
+                          display: 'flex', flexWrap: 'wrap' as const,
+                          flexDirection: (section.lang === 'Heb' ? 'row-reverse' : 'row') as 'row-reverse' | 'row',
+                          gap: 0,
+                        }}>
+                          {section.tokens.map((w, i) => (
+                            <WordChip key={i} word={w as WordToken} lang={section.lang}
+                              onTap={(word) => { setSelectedWord(word); setSelectedLang(section.lang); }} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           );
         })
