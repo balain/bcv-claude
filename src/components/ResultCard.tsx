@@ -167,7 +167,7 @@ export function ResultCard({
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: bookmarked ? accentColor : 'var(--ink-light)',
-              fontSize: 16, padding: '0 2px', flexShrink: 0,
+              fontSize: 'var(--fs-body)', padding: '0 2px', flexShrink: 0,
             }}
           >
             {bookmarked ? '★' : '☆'}
@@ -179,7 +179,7 @@ export function ResultCard({
             width: 22, height: 22, borderRadius: 6, border: 'none',
             background: 'var(--parchment-mid)', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, color: 'var(--ink-light)', flexShrink: 0,
+            fontSize: 'var(--fs-badge)', color: 'var(--ink-light)', flexShrink: 0,
           }}
           aria-label={expanded ? 'Collapse result' : 'Expand result'}
         >
@@ -236,11 +236,11 @@ export function ResultCard({
                   <button
                     onClick={(e) => { e.stopPropagation(); setAddingCrossRef((v) => !v); }}
                     title="Add cross-reference"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: accentColor, fontSize: 13, padding: '0 2px' }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: accentColor, fontSize: 'var(--fs-body)', padding: '0 2px' }}
                   >+</button>
                 )}
                 {crossRefs && crossRefs.length > 0 && (
-                  <span style={{ fontSize: 10, color: 'var(--ink-light)' }}>{crossRefsOpen ? '▼' : '▶'}</span>
+                  <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--ink-light)' }}>{crossRefsOpen ? '▼' : '▶'}</span>
                 )}
               </div>
 
@@ -261,7 +261,7 @@ export function ResultCard({
                       }
                     }}
                     style={{
-                      flex: 1, fontSize: 12, padding: '4px 8px', borderRadius: 6,
+                      flex: 1, fontSize: 'var(--fs-meta)', padding: '4px 8px', borderRadius: 6,
                       border: `1px solid ${accentColor}`, outline: 'none',
                       fontFamily: 'DM Sans',
                     }}
@@ -276,7 +276,7 @@ export function ResultCard({
                     }}
                     style={{
                       padding: '4px 10px', borderRadius: 6, border: 'none',
-                      background: accentColor, color: '#fff', fontSize: 12,
+                      background: accentColor, color: '#fff', fontSize: 'var(--fs-meta)',
                       cursor: 'pointer', fontFamily: 'DM Sans',
                     }}
                   >Add</button>
@@ -297,15 +297,15 @@ export function ResultCard({
                         {cr.targetLabel}
                       </span>
                       {cr.sourceDataset === 'user' && (
-                        <span style={{ fontSize: 10, color: 'var(--indigo)', fontWeight: 600 }}>★</span>
+                        <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--indigo)', fontWeight: 600 }}>★</span>
                       )}
                       {cr.userNote && (
-                        <span style={{ fontSize: 11, color: 'var(--ink-mid)', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-mid)', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {cr.userNote}
                         </span>
                       )}
                       {cr.votes != null && (
-                        <span style={{ fontSize: 10, color: 'var(--ink-light)', marginLeft: 'auto', flexShrink: 0 }}>
+                        <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--ink-light)', marginLeft: 'auto', flexShrink: 0 }}>
                           {cr.votes}
                         </span>
                       )}

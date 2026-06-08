@@ -101,7 +101,7 @@ export function GlossCard({ entry, lang, open, onToggle }: Props) {
             border: 'none',
             background: `${accent}18`,
             cursor: 'pointer',
-            fontSize: 10,
+            fontSize: 'var(--fs-badge)',
             color: accent,
             flexShrink: 0,
           }}

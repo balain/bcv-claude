@@ -160,7 +160,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
               background: 'var(--parchment-mid)',
               cursor: 'pointer',
               color: 'var(--ink-light)',
-              fontSize: 14,
+              fontSize: 'var(--fs-body)',
             }}
             aria-label="Close"
           >
