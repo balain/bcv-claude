@@ -43,12 +43,12 @@ export function SearchHistory({ history, open, onToggle, onSelect, onClear }: Pr
         }}
       >
         {/* Clock icon */}
-        <span style={{ fontSize: 12, lineHeight: 1, color: 'var(--ink-light)', flexShrink: 0 }}>🕐</span>
+        <span style={{ fontSize: 'var(--fs-meta)', lineHeight: 1, color: 'var(--ink-light)', flexShrink: 0 }}>🕐</span>
 
         <span
           style={{
             fontFamily: 'DM Sans',
-            fontSize: 12,
+            fontSize: 'var(--fs-meta)',
             fontWeight: 600,
             color: 'var(--ink-mid)',
             flex: 1,
@@ -61,7 +61,7 @@ export function SearchHistory({ history, open, onToggle, onSelect, onClear }: Pr
         <span
           style={{
             fontFamily: 'DM Sans',
-            fontSize: 11,
+            fontSize: 'var(--fs-control)',
             fontWeight: 600,
             color: 'var(--ink-light)',
             background: 'var(--parchment-mid)',
@@ -82,7 +82,7 @@ export function SearchHistory({ history, open, onToggle, onSelect, onClear }: Pr
             border: 'none',
             cursor: 'pointer',
             color: 'var(--ink-light)',
-            fontSize: 11,
+            fontSize: 'var(--fs-control)',
             padding: '2px 5px',
             borderRadius: 4,
             lineHeight: 1,
@@ -93,7 +93,7 @@ export function SearchHistory({ history, open, onToggle, onSelect, onClear }: Pr
         </button>
 
         {/* Chevron */}
-        <span style={{ fontSize: 10, color: 'var(--ink-light)', flexShrink: 0 }}>
+        <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--ink-light)', flexShrink: 0 }}>
           {open ? '▲' : '▼'}
         </span>
       </div>
@@ -124,7 +124,7 @@ export function SearchHistory({ history, open, onToggle, onSelect, onClear }: Pr
                   style={{
                     flex: 1,
                     fontFamily: entry.query.startsWith('"') ? 'DM Serif Display' : 'DM Serif Display',
-                    fontSize: 13,
+                    fontSize: 'var(--fs-body)',
                     color: 'var(--ink)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -136,7 +136,7 @@ export function SearchHistory({ history, open, onToggle, onSelect, onClear }: Pr
                 <span
                   style={{
                     flexShrink: 0,
-                    fontSize: 10,
+                    fontSize: 'var(--fs-badge)',
                     fontWeight: 600,
                     color: '#fff',
                     background: badgeColor,

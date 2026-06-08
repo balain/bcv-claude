@@ -81,7 +81,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
           <span
             style={{
               fontFamily: 'Playfair Display',
-              fontSize: 18,
+              fontSize: 'var(--fs-gloss-lemma)',
               fontWeight: 700,
               color: 'var(--ink)',
               letterSpacing: '-0.02em',
@@ -99,7 +99,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
               border: 'none',
               background: 'var(--surface-muted)',
               color: 'var(--ink-light)',
-              fontSize: 14,
+              fontSize: 'var(--fs-body)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -117,7 +117,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
         <div style={{ padding: '16px 20px 0' }}>
           <div
             style={{
-              fontSize: 11,
+              fontSize: 'var(--fs-control)',
               fontWeight: 700,
               letterSpacing: '0.07em',
               textTransform: 'uppercase',
@@ -156,13 +156,13 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
                     background: isActive ? 'var(--indigo-bg)' : 'var(--surface-muted)',
                     color: isActive ? 'var(--indigo)' : 'var(--ink-mid)',
                     cursor: 'pointer',
-                    fontSize: 11,
+                    fontSize: 'var(--fs-control)',
                     fontWeight: isActive ? 700 : 500,
                     fontFamily: 'DM Sans',
                     transition: 'border-color 0.15s, background 0.15s, color 0.15s',
                   }}
                 >
-                  <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
+                  <span style={{ fontSize: 'var(--fs-gloss-lemma)', lineHeight: 1 }}>{icon}</span>
                   <span>{label}</span>
                 </button>
               );
@@ -177,7 +177,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
         <div style={{ padding: '16px 20px 0' }}>
           <div
             style={{
-              fontSize: 11,
+              fontSize: 'var(--fs-control)',
               fontWeight: 700,
               letterSpacing: '0.07em',
               textTransform: 'uppercase',
@@ -217,7 +217,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
                     background: isActive ? 'var(--indigo-bg)' : 'var(--surface-muted)',
                     color: isActive ? 'var(--indigo)' : 'var(--ink-mid)',
                     cursor: 'pointer',
-                    fontSize: 11,
+                    fontSize: 'var(--fs-control)',
                     fontWeight: isActive ? 700 : 500,
                     fontFamily: 'DM Sans',
                     transition: 'border-color 0.15s, background 0.15s, color 0.15s',

@@ -139,7 +139,7 @@ export function ChapterView({
     borderRadius: 8,
     padding: '4px 9px',
     color: active ? '#fff' : 'rgba(255,255,255,0.25)',
-    fontSize: 13,
+    fontSize: 'var(--fs-body)' as const,
     cursor: active ? 'pointer' as const : 'default' as const,
     fontFamily: 'DM Sans',
     flexShrink: 0,
@@ -162,7 +162,7 @@ export function ChapterView({
         style={btnStyle(hasPrev)} aria-label="Previous chapter">◀</button>
 
       <span style={{
-        fontFamily: 'Playfair Display', fontSize: 16, fontWeight: 700,
+        fontFamily: 'Playfair Display', fontSize: 'var(--fs-meta)', fontWeight: 700,
         color: '#fff', letterSpacing: '-0.01em', flex: 1, textAlign: 'center',
       }}>
         {bookName} {currentChapter}
@@ -179,7 +179,7 @@ export function ChapterView({
           style={{
             width: 28, height: 28, borderRadius: 8, border: 'none',
             background: 'rgba(255,255,255,0.12)', cursor: 'pointer',
-            color: '#fff', fontSize: 14, display: 'flex',
+            color: '#fff', fontSize: 'var(--fs-body)', display: 'flex',
             alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}
         >⤢</button>
@@ -189,7 +189,7 @@ export function ChapterView({
         style={{
           width: 28, height: 28, borderRadius: 8, border: 'none',
           background: 'rgba(255,255,255,0.15)', cursor: 'pointer',
-          color: '#fff', fontSize: 14, display: 'flex',
+          color: '#fff', fontSize: 'var(--fs-body)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>✕</button>
     </div>
@@ -198,7 +198,7 @@ export function ChapterView({
   const subHeader = (
     <div style={{
       padding: '4px 14px', background: 'var(--navy-mid)',
-      fontSize: 10, fontWeight: 600, letterSpacing: '0.07em',
+      fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.07em',
       color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' as const,
       flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     }}>
@@ -209,7 +209,7 @@ export function ChapterView({
           background: originalsOpen ? `${accentColor}30` : 'rgba(255,255,255,0.08)',
           border: 'none', borderRadius: 6, padding: '2px 8px',
           color: originalsOpen ? accentColor : 'rgba(255,255,255,0.5)',
-          fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+          fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.06em',
           cursor: 'pointer', textTransform: 'uppercase' as const, fontFamily: 'DM Sans',
         }}
         aria-label={originalsOpen ? 'Hide original language' : 'Show original language'}
@@ -263,7 +263,7 @@ export function ChapterView({
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, gap: 2 }}>
                   <span style={{
                     minWidth: 24, padding: '1px 6px', borderRadius: 20,
-                    background: accentColor, color: '#fff', fontSize: 10,
+                    background: accentColor, color: '#fff', fontSize: 'var(--fs-badge)',
                     fontWeight: 700, fontFamily: 'DM Sans', textAlign: 'center', marginTop: 3,
                   }}>
                     {v.verse}
@@ -290,7 +290,7 @@ export function ChapterView({
                       style={{
                         background: isCrExpanded ? accentColor : 'var(--parchment-mid)',
                         border: 'none', borderRadius: 4, padding: '1px 3px',
-                        fontSize: 8, fontWeight: 700, fontFamily: 'DM Sans',
+                        fontSize: 'var(--fs-badge)', fontWeight: 700, fontFamily: 'DM Sans',
                         color: isCrExpanded ? '#fff' : 'var(--ink-light)',
                         cursor: 'pointer', flexShrink: 0, lineHeight: 1.4,
                       }}
@@ -313,7 +313,7 @@ export function ChapterView({
                     style={{
                       background: 'none', border: 'none', cursor: 'pointer',
                       color: bookmarked ? accentColor : 'var(--ink-light)',
-                      fontSize: 14, padding: '2px 4px', flexShrink: 0, marginTop: 2,
+                      fontSize: 'var(--fs-body)', padding: '2px 4px', flexShrink: 0, marginTop: 2,
                     }}
                   >
                     {bookmarked ? '★' : '☆'}
@@ -336,7 +336,7 @@ export function ChapterView({
                         {cr.targetLabel}
                       </span>
                       {cr.sourceDataset === 'user' && (
-                        <span style={{ fontSize: 10, color: 'var(--indigo)', fontWeight: 600 }}>★</span>
+                        <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--indigo)', fontWeight: 600 }}>★</span>
                       )}
                       {cr.userNote && (
                         <span style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-mid)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>

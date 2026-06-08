@@ -31,7 +31,7 @@ export function BookNav({ books, active, onSelect }: Props) {
         onClick={() => onSelect(null)}
         style={{
           flexShrink: 0,
-          fontSize: 11,
+          fontSize: 'var(--fs-control)',
           fontWeight: 600,
           fontFamily: 'DM Sans',
           padding: '4px 9px',
@@ -66,7 +66,7 @@ export function BookNav({ books, active, onSelect }: Props) {
               onClick={() => onSelect(isActive ? null : name)}
               style={{
                 flexShrink: 0,
-                fontSize: 11,
+                fontSize: 'var(--fs-control)',
                 fontWeight: 600,
                 fontFamily: 'DM Sans',
                 padding: '4px 9px',
