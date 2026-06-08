@@ -13,7 +13,7 @@ export function MiniChart({ visible, bars, totalHits }: Props) {
   return (
     <div
       style={{
-        background: '#fff',
+        background: 'var(--surface)',
         borderRadius: 8,
         padding: '6px 10px',
         marginBottom: 8,

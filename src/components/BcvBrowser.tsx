@@ -143,7 +143,7 @@ export function BcvBrowser({
           style={{
             flex: 1, padding: '7px 10px', borderRadius: 8,
             border: `1px solid ${parseError ? 'var(--amber)' : 'var(--border)'}`,
-            background: '#fff', fontSize: 14, fontFamily: 'DM Sans',
+            background: 'var(--surface)', fontSize: 14, fontFamily: 'DM Sans',
             color: 'var(--ink)', outline: 'none',
           }}
           aria-label="Passage reference"
@@ -186,7 +186,7 @@ export function BcvBrowser({
       {/* ── Bookmark panel ── */}
       {bookmarksOpen && (
         <div style={{
-          background: '#fff', borderBottom: '1px solid var(--border)',
+          background: 'var(--surface)', borderBottom: '1px solid var(--border)',
           padding: '8px 12px', flexShrink: 0, maxHeight: 180, overflowY: 'auto',
         }}>
           {bookmarks.length === 0 ? (
