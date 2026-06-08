@@ -80,7 +80,7 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(15,17,30,0.55)',
+          background: 'var(--backdrop)',
           animation: 'fadeIn 0.2s ease',
         }}
       />
@@ -91,17 +91,17 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
         style={{
           position: 'relative',
           width: '100%',
-          background: '#fff',
+          background: 'var(--surface)',
           borderRadius: '20px 20px 0 0',
           padding: '0 0 32px',
           animation: 'sheetIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-          boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
+          boxShadow: 'var(--shadow-lg)',
           maxHeight: '70%',
           overflowY: 'auto',
         }}
       >
         <div style={{ padding: '12px 0 0', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: '#e0e0e0' }} />
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)' }} />
         </div>
 
         <div

@@ -25,7 +25,7 @@ export function SearchHistory({ history, open, onToggle, onSelect, onClear }: Pr
         borderRadius: 10,
         overflow: 'hidden',
         border: '1px solid var(--border)',
-        background: '#fff',
+        background: 'var(--surface)',
         boxShadow: 'var(--shadow-sm)',
       }}
     >
@@ -39,7 +39,7 @@ export function SearchHistory({ history, open, onToggle, onSelect, onClear }: Pr
           padding: '6px 10px',
           cursor: 'pointer',
           userSelect: 'none',
-          background: open ? 'var(--parchment-mid)' : '#fff',
+          background: open ? 'var(--parchment-mid)' : 'var(--surface)',
         }}
       >
         {/* Clock icon */}

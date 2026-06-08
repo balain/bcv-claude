@@ -392,7 +392,7 @@ export function ChapterView({
 
               {originalsOpen && originals.length > 0 && originals.map((section) => (
                 <div key={section.corpus} style={{
-                  background: section.lang === 'Heb' ? '#fffdf8' : '#f8f9ff',
+                  background: section.lang === 'Heb' ? 'var(--orig-heb-bg)' : 'var(--orig-grk-bg)',
                   borderTop: '1px solid var(--border)', padding: '4px 8px 3px',
                 }}>
                   {hasBothCorpora && (
@@ -492,7 +492,7 @@ export function ChapterView({
     <div style={{ position: 'absolute', inset: 0, zIndex: 200, display: 'flex', flexDirection: 'column' }}>
       <div onClick={onClose} style={{
         position: 'absolute', inset: 0,
-        background: 'rgba(15,17,30,0.55)', animation: 'fadeIn 0.2s ease',
+        background: 'var(--backdrop)', animation: 'fadeIn 0.2s ease',
       }} />
       {panel}
       {definitionSheet}

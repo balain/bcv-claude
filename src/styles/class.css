@@ -13,19 +13,19 @@
   --cm-gap: 12px;
   --cm-radius: 8px;
   --cm-bg: var(--surface, #fdfdfb);
-  --cm-fg: var(--text, #1c1c1c);
-  --cm-muted: var(--text-muted, #6b6b6b);
-  --cm-border: var(--border, #e2e2dc);
-  --cm-accent: var(--accent, #5b6e9a);
-  --cm-accent-fg: var(--accent-fg, #ffffff);
+  --cm-fg: var(--ink, #1c1c1c);
+  --cm-muted: var(--ink-light, #6b6b6b);
+  --cm-border: var(--border, rgba(0,0,0,0.08));
+  --cm-accent: var(--indigo, #5b6e9a);
+  --cm-accent-fg: #ffffff;
   --cm-warn-bg: #fff7e0;
   --cm-warn-fg: #6b4f00;
   --cm-warn-border: #e8c46a;
   --cm-urgent-bg: #fde7e1;
   --cm-urgent-fg: #7a2a17;
   --cm-urgent-border: #d8806b;
-  --cm-anchor: #c9912a;
-  --cm-danger: #b3382a;
+  --cm-anchor: var(--amber, #c9912a);
+  --cm-danger: var(--red-verse, #b3382a);
 
   font-family: var(--font-body, 'DM Sans', system-ui, sans-serif);
   color: var(--cm-fg);
@@ -90,7 +90,7 @@
   padding: 8px 10px;
   border: 1px solid var(--cm-border);
   border-radius: var(--cm-radius);
-  background: white;
+  background: var(--surface, white);
   color: var(--cm-fg);
   width: 100%;
   box-sizing: border-box;
@@ -155,7 +155,7 @@
   border: 1px solid var(--cm-border);
   border-radius: var(--cm-radius);
   margin-bottom: var(--cm-gap);
-  background: white;
+  background: var(--surface, white);
 }
 .class-new-form label {
   display: grid;
@@ -200,7 +200,7 @@
   gap: 10px;
   align-items: baseline;
   padding: 10px 12px;
-  background: white;
+  background: var(--surface, white);
   border: 1px solid var(--cm-border);
   border-radius: var(--cm-radius);
 }
@@ -305,7 +305,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: white;
+  background: var(--surface, white);
   border: 1px solid var(--cm-border);
   border-radius: var(--cm-radius);
 }
@@ -369,6 +369,16 @@
   font-style: italic;
 }
 .class-error { color: var(--cm-danger); font-style: normal; }
+
+/* ---------- Dark-mode overrides for fixed-color banners ---------- */
+[data-theme="dark"] .class-mode {
+  --cm-warn-bg: #2a2000;
+  --cm-warn-fg: #e8c060;
+  --cm-warn-border: #6b5010;
+  --cm-urgent-bg: #2a1000;
+  --cm-urgent-fg: #f09070;
+  --cm-urgent-border: #7a3020;
+}
 
 /* ---------- Desktop tweaks ---------- */
 @media (min-width: 720px) {

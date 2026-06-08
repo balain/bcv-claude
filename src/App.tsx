@@ -10,6 +10,7 @@ import { ChapterView } from "./components/ChapterView";
 import { BcvBrowser } from "./components/BcvBrowser";
 import { SearchHistory } from "./components/SearchHistory";
 import type { HistoryEntry } from "./components/SearchHistory";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { computeDistribution } from "./lib/search";
 import { dbClient } from "./lib/db";
 import type { DBStatus, LexEntry } from "./lib/db";
@@ -20,6 +21,8 @@ import { BOOK_BY_ID, BOOK_BY_ABBR3 } from "./lib/books";
 import { loadBookmarks, saveBookmarks } from "./lib/bookmarks";
 import type { CrossRef } from "./lib/db";
 import { getCrossRefsBulk } from "./lib/crossRefs";
+import { readThemePref, saveThemePref, initTheme, resolveTheme } from "./lib/theme";
+import type { ThemePref } from "./lib/theme";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -38,6 +41,26 @@ export default function App() {
   const [selectedWord, setSelectedWord] = useState<WordToken | null>(null);
   const [selectedLang, setSelectedLang] = useState<Lang | null>(null);
   const [activeBook, setActiveBook] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // ─── Theme ───────────────────────────────────────────────────────────────
+  const [themePref, setThemePref] = useState<ThemePref>(() => readThemePref());
+  // resolvedTheme drives any in-React rendering that needs to know light vs dark
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() =>
+    resolveTheme(readThemePref())
+  );
+
+  useEffect(() => {
+    return initTheme(themePref, (theme) => setResolvedTheme(theme));
+  }, [themePref]);
+
+  const handleThemeChange = (pref: ThemePref) => {
+    saveThemePref(pref);
+    setThemePref(pref);
+  };
+
+  // Keep resolvedTheme in scope for potential future use
+  void resolvedTheme;
 
   const [results, setResults] = useState<BibleResult[]>([]);
   const [crossRefMap, setCrossRefMap] = useState<Map<string, CrossRef[]>>(new Map());
@@ -415,7 +438,18 @@ export default function App() {
           >
             <span style={{ display: "inline-block", animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
           </button>
-          <span style={{ fontSize: 14, color: "rgba(255,255,255,0.6)" }}>☀</span>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+            aria-label="Open settings"
+            style={{
+              background: "rgba(255,255,255,0.1)",
+              border: "none", borderRadius: 8, padding: "5px 8px",
+              color: "rgba(255,255,255,0.7)",
+              fontSize: 14, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}
+          >⚙</button>
         </div>
       </div>
 
@@ -688,6 +722,13 @@ export default function App() {
           }
         />
       )}
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        themePref={themePref}
+        onThemeChange={handleThemeChange}
+      />
     </div>
   );
 }

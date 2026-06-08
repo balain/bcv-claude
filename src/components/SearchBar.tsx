@@ -49,7 +49,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            background: '#fff',
+            background: 'var(--surface)',
             borderRadius: 10,
             padding: '7px 12px',
             border: '1px solid var(--border)',
@@ -100,11 +100,11 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            background: '#fff',
+            background: 'var(--surface)',
             borderRadius: 12,
             padding: '7px 11px',
             border: '1.5px solid var(--indigo)',
-            boxShadow: '0 0 0 3px var(--indigo-bg)',
+            boxShadow: 'var(--focus-ring)',
           }}
         >
           <span style={{ fontSize: 14, color: 'var(--ink-light)' }}>🔍</span>
@@ -191,7 +191,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
                     ? isOrig
                       ? 'var(--amber-bg)'
                       : 'var(--navy)'
-                    : '#fff',
+                    : 'var(--surface)',
                   color: isActive ? (isOrig ? 'var(--amber)' : '#fff') : 'var(--ink-light)',
                 }}
               >

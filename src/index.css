@@ -1,6 +1,9 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  color-scheme: light;
+
+  /* ── Palette ── */
   --navy: #151b2e;
   --navy-mid: #1e2740;
   --navy-light: #2d3a56;
@@ -18,10 +21,69 @@
   --indigo-bg: #eef2ff;
   --green: #2f9e44;
   --red-verse: #c92a2a;
+
+  /* ── Surfaces ── */
+  --surface: #ffffff;
+  --surface-muted: var(--parchment-mid);
+
+  /* ── Border / shadow ── */
   --border: rgba(0,0,0,0.08);
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
   --shadow-lg: 0 20px 60px rgba(0,0,0,0.20), 0 8px 24px rgba(0,0,0,0.10);
+
+  /* ── Original-language panel backgrounds ── */
+  --orig-heb-bg: #fffdf8;
+  --orig-grk-bg: #f8f9ff;
+
+  /* ── Focus ring ── */
+  --focus-ring: 0 0 0 3px var(--indigo-bg);
+
+  /* ── Overlay backdrop ── */
+  --backdrop: rgba(15,17,30,0.55);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ── Palette overrides ── */
+  --navy: #0f1a2e;
+  --navy-mid: #162030;
+  --navy-light: #1e2d45;
+  --parchment: #1a1c24;
+  --parchment-mid: #22252f;
+  --parchment-dark: #2a2e3a;
+  --ink: #e8e8f0;
+  --ink-mid: #b0b0c8;
+  --ink-light: #7a7a9a;
+  --amber: #e8a020;
+  --amber-light: #f0c060;
+  --amber-bg: #2a2010;
+  --indigo: #7c9ef8;
+  --indigo-light: #a8befc;
+  --indigo-bg: #1a2040;
+  --green: #4db86a;
+  --red-verse: #e05050;
+
+  /* ── Surfaces ── */
+  --surface: #22252f;
+  --surface-muted: #2a2e3a;
+
+  /* ── Border / shadow ── */
+  --border: rgba(255,255,255,0.10);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.20);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.40), 0 2px 4px rgba(0,0,0,0.25);
+  --shadow-lg: 0 20px 60px rgba(0,0,0,0.60), 0 8px 24px rgba(0,0,0,0.40);
+
+  /* ── Original-language panel backgrounds ── */
+  --orig-heb-bg: #22200e;
+  --orig-grk-bg: #181a28;
+
+  /* ── Focus ring ── */
+  --focus-ring: 0 0 0 3px rgba(124,158,248,0.3);
+
+  /* ── Overlay backdrop ── */
+  --backdrop: rgba(0,0,5,0.70);
 }
 
 html, body, #root { height: 100%; }
@@ -29,6 +91,7 @@ html, body, #root { height: 100%; }
 body {
   font-family: 'DM Sans', sans-serif;
   color: var(--ink);
+  background: var(--parchment);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -53,6 +116,10 @@ button { font-family: inherit; }
 @keyframes sheetIn {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
 }
 @keyframes fadeIn {
   from { opacity: 0; }

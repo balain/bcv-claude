@@ -52,7 +52,7 @@ export function ResultCard({
   const accentColor = badgeColor;
 
   const sectionBg = (section: OriginalSection) =>
-    section.lang === 'Heb' ? '#fffdf8' : '#f8f9ff';
+    section.lang === 'Heb' ? 'var(--orig-heb-bg)' : 'var(--orig-grk-bg)';
 
   /** Render English verse text as individually-clickable words. */
   const renderEngText = (text: string, matchWord: string) =>
@@ -108,7 +108,7 @@ export function ResultCard({
   return (
     <div
       style={{
-        background: '#fff',
+        background: 'var(--surface)',
         borderRadius: 10,
         marginBottom: 8,
         overflow: 'hidden',
