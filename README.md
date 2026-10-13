@@ -14,6 +14,7 @@ A fast, offline-capable Bible search tool with interlinear Hebrew and Greek, bui
 - **Lemma / form search** — search from within a word-lookup card to find all occurrences of a root or inflected form
 - **GlossCard** — single-word original-language searches display the word's gloss and meaning above the result list
 - **Chapter view** — click any Book:Chapter:Verse reference to read the full NASB chapter, with prev/next chapter navigation and optional original-language interlinear per verse
+- **Browse chapter navigation** — a single scrolling chapter row stays below the book list while verses scroll. Every book has a numeric chapter jump; chapter buttons, previous/next arrows, passage input, and URL stay synchronized.
 - **Search history** — quick access to your recent searches, persisted locally
 - **Search settings** — open the gear button to configure combined LXX/GNT searches (enabled by default) and the maximum number of verse hits (200 by default, or unlimited). Preferences are saved locally and apply to searches from word definitions too.
 - **Class Mode** — a specialized workspace for teachers and students to manage series, sessions, scripture references, and study notes with a dedicated local database
