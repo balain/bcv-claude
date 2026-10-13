@@ -11,6 +11,7 @@ lerna-debug.log*
 CLAUDE.md
 
 justfile
+justfile.bak
 
 node_modules
 data
@@ -36,5 +37,8 @@ docs/
 .env
 
 public/.htaccess
+<<<<<<< HEAD
 .gitattributes
+=======
+>>>>>>> gh/main
 

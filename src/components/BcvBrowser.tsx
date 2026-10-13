@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { BOOK_META, BOOK_BY_ID } from '../lib/books';
 import { parseRefs } from '../lib/class/refParser';
 import { getClassClient } from '../lib/class/client';
-import type { Bookmark } from '../types';
+import type { Bookmark, Source } from '../types';
 import { ChapterView } from './ChapterView';
+import { ChapterNavigation } from './ChapterNavigation';
 
 interface Props {
   browsePos: { bookId: number; chapter: number; verse: number } | null;
   onNavigate: (bookId: number, chapter: number, verse: number) => void;
+  onSearch: (query: string, source: Source) => void;
   bookmarks: Bookmark[];
   onBookmark: (bookId: number, chapter: number, verse: number, label: string) => void;
   onRemoveBookmark: (id: string) => void;
@@ -27,7 +29,7 @@ function formatPos(bookId: number, chapter: number, verse: number): string {
 }
 
 export function BcvBrowser({
-  browsePos, onNavigate, bookmarks, onBookmark, onRemoveBookmark, isBookmarked, onOpenClass,
+  browsePos, onNavigate, onSearch, bookmarks, onBookmark, onRemoveBookmark, isBookmarked, onOpenClass,
   returnUrl, onReturn,
 }: Props) {
   const [passageInput, setPassageInput] = useState('');
@@ -95,6 +97,8 @@ export function BcvBrowser({
 
   function selectChapter(chapter: number) {
     if (!selectedBookId) return;
+    const book = BOOK_BY_ID.get(selectedBookId);
+    if (!book || !Number.isInteger(chapter) || chapter < 1 || chapter > book.chapters) return;
     onNavigate(selectedBookId, chapter, 1);
   }
 
@@ -225,14 +229,12 @@ export function BcvBrowser({
         </div>
       )}
 
-      {/* ── Scrollable content: book picker + chapter grid OR chapter reader ── */}
-      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-
         {/* Book picker — always shown above chapter view; compact when any book is selected */}
         <div style={{
           padding: compact ? '6px 10px' : '10px 12px',
           borderBottom: '1px solid var(--border)',
           background: 'var(--parchment)',
+          flexShrink: 0,
         }}>
           {!compact && (
             <p style={{
@@ -288,52 +290,27 @@ export function BcvBrowser({
           </div>
         </div>
 
-        {/* Chapter grid — shown when book is selected but no chapter yet loaded */}
-        {selectedBookId && !showChapter && (() => {
-          const book = BOOK_BY_ID.get(selectedBookId)!;
-          const accent = book.testament === 'OT' ? accentOT : accentNT;
-          const accentBg = book.testament === 'OT' ? 'var(--amber-bg)' : 'var(--indigo-bg)';
-          return (
-            <div style={{ padding: '10px 12px' }}>
-              <p style={{
-                fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.08em',
-                color: 'var(--ink-light)', textTransform: 'uppercase',
-                fontFamily: 'DM Sans', margin: '0 0 8px',
-              }}>
-                {book.name} — {book.chapters} chapter{book.chapters !== 1 ? 's' : ''}
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {Array.from({ length: book.chapters }, (_, i) => i + 1).map((ch) => (
-                  <button
-                    key={ch}
-                    onClick={() => selectChapter(ch)}
-                    style={{
-                      width: 36, height: 36, borderRadius: 8, border: 'none',
-                      background: accentBg, color: accent,
-                      fontSize: 'var(--fs-body)', fontFamily: 'DM Sans', fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {ch}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
+        {selectedBookId && (
+          <ChapterNavigation
+            book={BOOK_BY_ID.get(selectedBookId)!}
+            chapter={showChapter ? browsePos!.chapter : 1}
+            onSelect={selectChapter}
+          />
+        )}
 
         {/* Chapter view — embedded inline when chapter is loaded */}
         {showChapter && currentBook && (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, position: 'relative' }}>
             <ChapterView
               standalone
+              onChapterChange={selectChapter}
               abbr3={currentBook.abbr3}
               bookName={currentBook.name}
               chapter={browsePos!.chapter}
               highlightVerse={browsePos!.verse}
               testament={currentBook.testament}
               onClose={() => setSelectedBookId(null)}
-              onSearch={() => {}}
+              onSearch={onSearch}
               onBookmark={onBookmark}
               isBookmarked={isBookmarked}
               versesWithNotes={versesWithNotes}
@@ -350,7 +327,6 @@ export function BcvBrowser({
             />
           </div>
         )}
-      </div>
     </div>
   );
 }

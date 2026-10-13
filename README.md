@@ -6,13 +6,17 @@ A fast, offline-capable Bible search tool with interlinear Hebrew and Greek, bui
 
 - **Full-text search** across six translations — KJV, ASV, LEB, NASB, Hebrew MT (WLC), LXX, and GNT
 - **Phrase search** — wrap terms in double quotes: `"holy spirit"`, `"in the beginning"`
+- **Reference search** — enter verses, chapters, or ranges such as `John 3:16,18; Rom 8:28`, `Psalm 23`, `John 3-4`, or `John 3:16–4:6`. For single-chapter books, `Jude 3` means Jude 1:3. References display NASB with the available interlinear text, ignore the search hit limit, and preserve input order while removing duplicate verses. The Bible order toggle sorts references into canonical order and defaults to off. Invalid references are reported alongside valid results; bare book names remain word searches.
 - **Interlinear display** — every result card shows the underlying Hebrew (WLC) and/or Greek (LXX / GNT) text alongside the English translation
 - **Dual OT interlinear** — OT verses show both the Masoretic (WLC) and Septuagint (LXX) in parallel
 - **Word lookup** — tap any Hebrew or Greek word chip to see its lemma, transliteration, Strong's number, gloss, and full lexical definition
+- **English Strong's lookup** — select Strong's beside a single-word English search to browse all Hebrew and Greek lexicon definitions containing that word, then select a lemma to search it.
 - **Lemma / form search** — search from within a word-lookup card to find all occurrences of a root or inflected form
 - **GlossCard** — single-word original-language searches display the word's gloss and meaning above the result list
 - **Chapter view** — click any Book:Chapter:Verse reference to read the full NASB chapter, with prev/next chapter navigation and optional original-language interlinear per verse
+- **Browse chapter navigation** — a single scrolling chapter row stays below the book list while verses scroll. Every book has a numeric chapter jump; chapter buttons, previous/next arrows, passage input, and URL stay synchronized.
 - **Search history** — quick access to your recent searches, persisted locally
+- **Search settings** — open the gear button to configure combined LXX/GNT searches (enabled by default) and the maximum number of verse hits (200 by default, or unlimited). Preferences are saved locally and apply to searches from word definitions too.
 - **Class Mode** — a specialized workspace for teachers and students to manage series, sessions, scripture references, and study notes with a dedicated local database
 - **Distribution chart** — optional bar chart showing hit density across the biblical canon
 - **Book filter** — click any book pill to narrow results to a single book
@@ -59,6 +63,17 @@ npm run build
 
 The output in `dist/` is a static site. Serve it with any HTTPS host that can
 set the required security headers:
+
+When hosting under a subdirectory, set the base path when building. For
+`https://zqx6s.uber.space/bcv/`, use:
+
+```bash
+BASE_PATH=/bcv/ npm run build
+```
+
+Deploy the contents of `dist/` into the server's `/bcv/` directory, and serve
+`data/bcv.db` at `/bcv/db/bcv.db`. Rebuild whenever the hosting path changes;
+otherwise JavaScript URLs point to the site root and the page cannot start.
 
 ```
 Cross-Origin-Opener-Policy: same-origin

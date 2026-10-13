@@ -17,6 +17,8 @@ interface ChapterViewProps {
   onSearch: (query: string, source: Source) => void;
   /** When true, renders inline (no fixed overlay, no close button). Used in BcvBrowser. */
   standalone?: boolean;
+  /** Browse mode controls the chapter so navigation stays in sync with its URL and picker. */
+  onChapterChange?: (chapter: number) => void;
   /** When provided, shows an "open in browse" button in the overlay header. */
   onOpenInBrowse?: (bookId: number, chapter: number, verse: number) => void;
   /** When provided, shows ☆/★ per verse for bookmarking. */
@@ -42,12 +44,14 @@ const SECTION_LABEL: Record<string, string> = {
 export function ChapterView({
   abbr3, bookName, chapter: initialChapter, highlightVerse,
   testament, onClose, onSearch,
-  standalone, onOpenInBrowse, onBookmark, isBookmarked,
+  standalone, onChapterChange, onOpenInBrowse, onBookmark, isBookmarked,
   versesWithNotes, onNotesBadgeClick, onCrossRefClick, onAddCrossRef,
 }: ChapterViewProps) {
   const bookId = BOOK_BY_ABBR3.get(abbr3)?.id ?? 0;
-  const [currentChapter, setCurrentChapter] = useState(initialChapter);
-  const [currentHighlight, setCurrentHighlight] = useState(highlightVerse);
+  const [localChapter, setCurrentChapter] = useState(initialChapter);
+  const [localHighlight, setCurrentHighlight] = useState(highlightVerse);
+  const currentChapter = onChapterChange ? initialChapter : localChapter;
+  const currentHighlight = onChapterChange ? highlightVerse : localHighlight;
   const [totalChapters, setTotalChapters] = useState<number | null>(null);
   const [verses, setVerses] = useState<ChapterVerse[]>([]);
   const [verseOriginals, setVerseOriginals] = useState<ChapterVerseOriginals[]>([]);
@@ -119,6 +123,10 @@ export function ChapterView({
   }, [loading, currentHighlight]);
 
   const goTo = (chap: number) => {
+    if (onChapterChange) {
+      onChapterChange(chap);
+      return;
+    }
     setCurrentChapter(chap);
     setCurrentHighlight(0);
   };

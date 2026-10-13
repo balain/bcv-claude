@@ -1,11 +1,13 @@
 import { Fragment, useEffect, useState } from 'react';
 import type { Source } from '../types';
+import { parseReferenceQuery } from '../lib/referenceSearch';
 
 interface Props {
   collapsed: boolean;
   onToggle: () => void;
   query: string;
   source: Source;
+  combineGreek: boolean;
   onGo: (query: string, source: Source) => void;
 }
 
@@ -21,9 +23,10 @@ const SOURCES: { id: Source; group: 'eng' | 'orig' }[] = [
 
 const isPhrase = (q: string) => q.length >= 2 && q.startsWith('"') && q.endsWith('"');
 
-export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
+export function SearchBar({ collapsed, onToggle, query, source, combineGreek, onGo }: Props) {
   const [draft, setDraft] = useState(query);
   const [localSource, setLocalSource] = useState<Source>(source);
+  const displaySource = parseReferenceQuery(draft) ? 'NASB' : localSource;
 
   useEffect(() => setDraft(query), [query]);
   useEffect(() => setLocalSource(source), [source]);
@@ -62,7 +65,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
             {query || '—'}
           </span>
           <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--ink-light)', marginLeft: 4 }}>
-            · {source}
+            · {combineGreek && (source === 'LXX' || source === 'GNT') ? 'LXX + GNT' : source}
           </span>
         </div>
         <button
@@ -123,7 +126,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
               fontFamily: 'DM Sans',
               minWidth: 0,
             }}
-            placeholder="Search…"
+            placeholder="Search words or references (John 3:16; Jude 3)…"
           />
           {draft && (
             <span
@@ -154,7 +157,10 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
 
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
         {SOURCES.map(({ id, group }, i, arr) => {
-          const isActive = localSource === id;
+          const isActive = displaySource === id || (
+            combineGreek && (displaySource === 'LXX' || displaySource === 'GNT') &&
+            (id === 'LXX' || id === 'GNT')
+          );
           const isOrig = group === 'orig';
           const prevGroup = i > 0 ? arr[i - 1].group : group;
           return (
@@ -170,6 +176,7 @@ export function SearchBar({ collapsed, onToggle, query, source, onGo }: Props) {
                 />
               )}
               <button
+                aria-pressed={isActive}
                 onClick={() => {
                   setLocalSource(id);
                   onGo(draft, id);

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SearchBar } from "./components/SearchBar";
 import { BookNav } from "./components/BookNav";
+import { TestamentFilter } from "./components/TestamentFilter";
 import type { BookNavItem } from "./components/BookNav";
 import { MiniChart } from "./components/MiniChart";
 import { GlossCard } from "./components/GlossCard";
 import { ResultCard } from "./components/ResultCard";
 import { DefinitionSheet } from "./components/DefinitionSheet";
+import { EnglishStrongsPopup } from "./components/EnglishStrongsPopup";
 import { ChapterView } from "./components/ChapterView";
 import { BcvBrowser } from "./components/BcvBrowser";
 import { SearchHistory } from "./components/SearchHistory";
@@ -14,7 +16,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { computeDistribution } from "./lib/search";
 import { dbClient } from "./lib/db";
 import type { DBStatus, LexEntry } from "./lib/db";
-import type { Lang, Source, WordToken, BibleResult, Bookmark } from "./types";
+import type { Lang, Source, Testament, WordToken, BibleResult, Bookmark } from "./types";
 import { ClassMode } from "./components/class/ClassMode";
 import { initClassClient, getClassClient } from "./lib/class/client";
 import { BOOK_BY_ID, BOOK_BY_ABBR3 } from "./lib/books";
@@ -24,6 +26,8 @@ import { getCrossRefsBulk } from "./lib/crossRefs";
 import { readThemePref, saveThemePref, initTheme, resolveTheme } from "./lib/theme";
 import type { ThemePref } from "./lib/theme";
 import { useFontSize } from "./lib/useFontSize";
+import { readSearchSettings } from "./lib/searchSettings";
+import { parseReferenceQuery } from "./lib/referenceSearch";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -37,12 +41,33 @@ initClassClient(
 export default function App() {
   const [query, setQuery] = useState("loving");
   const [source, setSource] = useState<Source>("NASB");
+  const referenceQuery = useMemo(() => parseReferenceQuery(query), [query]);
+  const isReferenceSearch = referenceQuery !== null;
+  const [referenceErrors, setReferenceErrors] = useState<string[]>([]);
+  const [referenceBibleOrder, setReferenceBibleOrder] = useState(() => {
+    try { return localStorage.getItem('bcv-reference-bible-order') === 'true'; }
+    catch { return false; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('bcv-reference-bible-order', String(referenceBibleOrder)); }
+    catch { /* Storage may be unavailable. */ }
+  }, [referenceBibleOrder]);
   const [searchCollapsed, setSearchCollapsed] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [selectedWord, setSelectedWord] = useState<WordToken | null>(null);
   const [selectedLang, setSelectedLang] = useState<Lang | null>(null);
   const [activeBook, setActiveBook] = useState<string | null>(null);
+  const [activeTestament, setActiveTestament] = useState<Testament | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [englishStrongsWord, setEnglishStrongsWord] = useState<string | null>(null);
+  const [searchSettings, setSearchSettings] = useState(readSearchSettings);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('bcv-search-settings', JSON.stringify(searchSettings));
+    } catch { /* Storage may be unavailable. */ }
+  }, [searchSettings]);
 
   // ─── Font size ───────────────────────────────────────────────────────────
   const [fontSizePref, setFontSizePref] = useFontSize();
@@ -67,10 +92,13 @@ export default function App() {
   void resolvedTheme;
 
   const [results, setResults] = useState<BibleResult[]>([]);
+  const [totalHits, setTotalHits] = useState(0);
+  const [hitsByBook, setHitsByBook] = useState<Record<string, number>>({});
   const [crossRefMap, setCrossRefMap] = useState<Map<string, CrossRef[]>>(new Map());
   // Seed from current singleton status so we don't miss events that fired before mount
   const [dbStatus, setDbStatus] = useState<DBStatus>(dbClient.status);
   const [dbMessage, setDbMessage] = useState("");
+  const [searchError, setSearchError] = useState("");
   const searchAbort = useRef<AbortController | null>(null);
 
   // Search history — persisted to localStorage
@@ -184,6 +212,7 @@ export default function App() {
   useEffect(() => {
     // Re-sync in case status changed between useState init and effect run
     setDbStatus(dbClient.status);
+    setDbMessage(dbClient.statusMessage);
     return dbClient.onStatus((status, message) => {
       setDbStatus(status);
       if (message) setDbMessage(message);
@@ -197,12 +226,19 @@ export default function App() {
       searchAbort.current?.abort();
       const ctrl = new AbortController();
       searchAbort.current = ctrl;
+      setSearchError("");
       try {
-        const r = await dbClient.search(q, s);
+        const r = await dbClient.search(q, s, searchSettings);
         if (ctrl.signal.aborted) return;
-        setResults(r);
+        setResults(r.results);
+        setTotalHits(r.totalHits);
+        setHitsByBook(r.hitsByBook);
+        setReferenceErrors(r.errors ?? []);
+        setActiveTestament((current) =>
+          current && !r.results.some((result) => result.testament === current) ? null : current,
+        );
         // Fetch cross-refs for all results after search settles
-        const verses = r.map((res) => ({
+        const verses = r.results.map((res) => ({
           bookId: BOOK_BY_ABBR3.get(res.bookAbbr)?.id ?? 0,
           chapter: res.chapter,
           verse: res.verse,
@@ -213,10 +249,13 @@ export default function App() {
           if (!ctrl.signal.aborted) setCrossRefMap(map);
         }).catch(() => {});
       } catch (e) {
-        if (!ctrl.signal.aborted) console.error("Search error", e);
+        if (!ctrl.signal.aborted) {
+          console.error("Search error", e);
+          setSearchError(e instanceof Error ? e.message : String(e));
+        }
       }
     },
-    [dbStatus],
+    [dbStatus, searchSettings],
   );
 
   useEffect(() => {
@@ -245,16 +284,16 @@ export default function App() {
       q.length >= 2 && q.startsWith('"') && q.endsWith('"');
     const isSingleWord =
       query.trim().length > 0 && !query.includes(" ") && !isPhrase(query);
-    if (!isOrigLang || !isSingleWord || results.length === 0) {
+    if (isReferenceSearch || !isOrigLang || !isSingleWord || results.length === 0) {
       setGlossEntry(null);
       return;
     }
 
-    const targetCorpus =
-      source === "Heb" ? "WLC" : source === "LXX" ? "LXX" : "GNT";
+    const targetCorpora = source === "Heb" ? ["WLC"] :
+      searchSettings.combineGreek ? ["LXX", "GNT"] : [source];
     let token: WordToken | undefined;
     for (const r of results) {
-      const section = r.originals.find((s) => s.corpus === targetCorpus);
+      const section = r.originals.find((s) => targetCorpora.includes(s.corpus));
       if (section) {
         token = section.tokens.find((t) => t.highlight);
         if (token) break;
@@ -280,19 +319,54 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [source, query, results]);
+  }, [source, query, results, searchSettings.combineGreek, isReferenceSearch]);
+
+  const hasBothTestaments = results.some((r) => r.testament === "OT") &&
+    results.some((r) => r.testament === "NT");
+
+  const orderedResults = useMemo(() => {
+    if (!isReferenceSearch || !referenceBibleOrder) return results;
+    return [...results].sort((a, b) =>
+      (BOOK_BY_ABBR3.get(a.bookAbbr)?.id ?? 0) - (BOOK_BY_ABBR3.get(b.bookAbbr)?.id ?? 0) ||
+      a.chapter - b.chapter || a.verse - b.verse,
+    );
+  }, [results, isReferenceSearch, referenceBibleOrder]);
+
+  const testamentResults = useMemo(
+    () => activeTestament ? orderedResults.filter((r) => r.testament === activeTestament) : orderedResults,
+    [orderedResults, activeTestament],
+  );
 
   const filtered = useMemo(
     () =>
-      activeBook ? results.filter((r) => r.bookAbbr === activeBook) : results,
-    [results, activeBook],
+      activeBook ? testamentResults.filter((r) => r.bookAbbr === activeBook) : testamentResults,
+    [testamentResults, activeBook],
   );
+
+  const testamentHitTotals = useMemo(() => {
+    const totals = { OT: 0, NT: 0 };
+    for (const [book, count] of Object.entries(hitsByBook)) {
+      const testament = BOOK_BY_ABBR3.get(book)?.testament;
+      if (testament) totals[testament] += count;
+    }
+    return totals;
+  }, [hitsByBook]);
+
+  const showBookBreakdown = activeBook !== null &&
+    testamentHitTotals.OT > 0 && testamentHitTotals.NT > 0;
+  const showTestamentTotal = activeBook === null && activeTestament !== null;
+  const filteredTotalHits = activeBook ? hitsByBook[activeBook] ?? 0 :
+    totalHits;
+  const hitSummary = isReferenceSearch ?
+    `${filtered.length}${activeBook || activeTestament ? ` of ${totalHits}` : ''} ${filtered.length === 1 ? 'verse' : 'verses'}` : showBookBreakdown ?
+      `${filtered.length} of ${testamentHitTotals.OT}/${testamentHitTotals.NT}/${totalHits} hits` :
+      `${filtered.length}${searchSettings.maxHits !== null || showTestamentTotal ? ` of ${filteredTotalHits}` : ""} hits`;
 
   const books = useMemo<BookNavItem[]>(() => {
     const seen = new Set<string>();
     const out: BookNavItem[] = [];
-    const ot = results.filter((r) => r.testament === "OT");
-    const nt = results.filter((r) => r.testament === "NT");
+    const ot = testamentResults.filter((r) => r.testament === "OT");
+    const nt = testamentResults.filter((r) => r.testament === "NT");
     for (const r of [...ot, ...nt]) {
       if (!seen.has(r.bookAbbr)) {
         seen.add(r.bookAbbr);
@@ -300,14 +374,20 @@ export default function App() {
       }
     }
     return out;
-  }, [results]);
+  }, [testamentResults]);
 
-  const distribution = useMemo(() => computeDistribution(results), [results]);
+  const distribution = useMemo(() => computeDistribution(testamentResults), [testamentResults]);
 
   const onGo = (q: string, s: Source) => {
+    if (parseReferenceQuery(q)) s = 'NASB';
+    location.hash = "";
+    setMode("search");
     setQuery(q);
     setSource(s);
     setActiveBook(null);
+    setActiveTestament(null);
+    setEnglishStrongsWord(null);
+    setReferenceErrors([]);
     // Record in history — deduplicate (remove prior occurrence of same query+source),
     // prepend, and cap at 30 entries.
     setSearchHistory((prev) => {
@@ -467,6 +547,7 @@ export default function App() {
         <BcvBrowser
           browsePos={browsePos}
           onNavigate={handleBrowseNavigate}
+          onSearch={onGo}
           bookmarks={bookmarks}
           onBookmark={addBookmark}
           onRemoveBookmark={removeBookmark}
@@ -489,6 +570,7 @@ export default function App() {
             onToggle={() => setSearchCollapsed((v) => !v)}
             query={query}
             source={source}
+            combineGreek={searchSettings.combineGreek}
             onGo={onGo}
           />
 
@@ -525,6 +607,7 @@ export default function App() {
                 {query || "—"}
               </span>
               <span
+                title={!isReferenceSearch && showBookBreakdown ? 'Returned hits in selected book of OT / NT / total hits' : undefined}
                 style={{
                   fontSize: "var(--fs-body)",
                   color: "var(--ink-light)",
@@ -533,22 +616,39 @@ export default function App() {
               >
                 {isLoading
                   ? dbMessage || "Loading…"
-                  : `${filtered.length} hits · ${source}`}
+                  : `${hitSummary} · ${isReferenceSearch ? 'NASB' : searchSettings.combineGreek && (source === "LXX" || source === "GNT") ? "LXX + GNT" : source}`}
               </span>
-              {!isLoading && results.length >= 200 && (
-                <span
-                  style={{
-                    fontSize: "var(--fs-meta)",
-                    color: "var(--amber)",
-                    fontFamily: "DM Sans",
-                    fontWeight: 600,
-                  }}
+              {!isLoading && ENG_SOURCES.has(source) && /^[a-z]+(?:['’-][a-z]+)*$/i.test(query.trim()) && (
+                <button
+                  onClick={() => setEnglishStrongsWord(query.trim())}
+                  style={{ border: '1px solid var(--border)', borderRadius: 20, padding: '5px 12px', background: 'var(--surface)', color: 'var(--indigo)', fontSize: 'var(--fs-control)', fontWeight: 600, cursor: 'pointer' }}
                 >
-                  ⚠ capped at 200
-                </span>
+                  Strong’s
+                </button>
               )}
             </div>
 
+            {isReferenceSearch && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, color: 'var(--ink)', fontSize: 'var(--fs-control)', fontFamily: 'DM Sans' }}>
+                <input type="checkbox" checked={referenceBibleOrder} onChange={(e) => setReferenceBibleOrder(e.target.checked)} />
+                Bible order
+              </label>
+            )}
+            {isReferenceSearch && referenceErrors.length > 0 && (
+              <div role="alert" style={{ padding: 12, marginBottom: 10, border: '1px solid var(--amber)', borderRadius: 8, background: 'var(--amber-bg)', color: 'var(--ink)', fontSize: 'var(--fs-body)' }}>
+                <div style={{ fontWeight: 600 }}>Some references could not be displayed:</div>
+                <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+                  {referenceErrors.map((error, index) => <li key={index}>{error}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {(dbStatus === "error" || searchError) && (
+              <div role="alert" style={{ padding: 16, marginBottom: 12, border: '1px solid var(--amber)', borderRadius: 8, background: 'var(--amber-bg)', color: 'var(--ink)' }}>
+                <strong>{dbStatus === "error" ? "Database could not load" : "Search failed"}</strong>
+                <p>{dbStatus === "error" ? dbMessage || "The database worker could not start. Reload the page." : searchError}</p>
+              </div>
+            )}
             {isLoading ? (
               <div
                 style={{
@@ -581,11 +681,20 @@ export default function App() {
                   books={books}
                   active={activeBook}
                   onSelect={setActiveBook}
+                  prefix={hasBothTestaments && (
+                    <TestamentFilter
+                      active={activeTestament}
+                      onSelect={(testament) => {
+                        setActiveTestament(testament);
+                        setActiveBook(null);
+                      }}
+                    />
+                  )}
                 />
                 <MiniChart
                   visible={showChart}
                   bars={distribution}
-                  totalHits={results.length}
+                  totalHits={testamentResults.length}
                 />
 
                 {glossEntry && (
@@ -622,7 +731,7 @@ export default function App() {
                           setSelectedLang(lang);
                         }}
                         onEngWordClick={(word) =>
-                          onGo(word, ENG_SOURCES.has(source) ? source : "NASB")
+                          onGo(word, isReferenceSearch ? 'NASB' : ENG_SOURCES.has(source) ? source : "NASB")
                         }
                         onRefClick={(r) =>
                           setChapterView({
@@ -727,6 +836,16 @@ export default function App() {
         />
       )}
 
+      {englishStrongsWord && (
+        <EnglishStrongsPopup
+          key={englishStrongsWord}
+          word={englishStrongsWord}
+          combineGreek={searchSettings.combineGreek}
+          onClose={() => setEnglishStrongsWord(null)}
+          onSearch={onGo}
+        />
+      )}
+
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -734,6 +853,8 @@ export default function App() {
         onThemeChange={handleThemeChange}
         fontSizePref={fontSizePref}
         onFontSizeChange={setFontSizePref}
+        searchSettings={searchSettings}
+        onSearchSettingsChange={setSearchSettings}
       />
     </div>
   );

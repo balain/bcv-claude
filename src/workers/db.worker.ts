@@ -19,6 +19,7 @@
  */
 
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import { parseReferenceQuery } from '../lib/referenceSearch';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite resolves this to the correct URL at both dev and build time
 import sqlite3WasmUrl from '@sqlite.org/sqlite-wasm/sqlite3.wasm?url';
@@ -261,7 +262,7 @@ const VERSE_SQL_ENG = `
     WHERE v.translation = ?1
       AND v.rowid IN (SELECT rowid FROM verses_fts WHERE verses_fts MATCH ?2)
     ORDER BY v.book_id, v.chapter, v.verse
-    LIMIT 200
+    LIMIT ?4
   )
   SELECT h.abbr3, h.book_name, h.testament, h.chapter, h.verse, h.text,
          t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus
@@ -284,7 +285,8 @@ const VERSE_SQL_TOKEN = `
     FROM tokens_fts f
     JOIN tokens t ON t.rowid = f.rowid
     WHERE tokens_fts MATCH ?1 AND t.corpus = ?2
-    LIMIT 200
+    ORDER BY t.book_id, t.chapter, t.verse
+    LIMIT ?4
   )
   SELECT b.abbr3, b.name AS book_name, b.testament, hv.chapter, hv.verse,
          COALESCE(v.text, '') AS text,
@@ -298,16 +300,16 @@ const VERSE_SQL_TOKEN = `
   ORDER BY hv.book_id, hv.chapter, hv.verse, t.word_num
 `;
 
-// Dual-corpus OT search — for Heb and LXX sources. Finds hit verses via the
-// searched corpus (?2), then joins BOTH WLC and LXX tokens so each result card
-// can show the Hebrew MT alongside the Septuagint Greek.
+// Hebrew/LXX search, optionally including GNT in the same verse limit.
+// OT results include WLC and LXX; NT results include GNT.
 const VERSE_SQL_OT_DUAL = `
   WITH hit_verses AS (
     SELECT DISTINCT t.book_id, t.chapter, t.verse
     FROM tokens_fts f
     JOIN tokens t ON t.rowid = f.rowid
-    WHERE tokens_fts MATCH ?1 AND t.corpus = ?2
-    LIMIT 200
+    WHERE tokens_fts MATCH ?1 AND t.corpus IN (?2, ?5)
+    ORDER BY t.book_id, t.chapter, t.verse
+    LIMIT ?4
   )
   SELECT b.abbr3, b.name AS book_name, b.testament, hv.chapter, hv.verse,
          COALESCE(v.text, '') AS text,
@@ -317,9 +319,34 @@ const VERSE_SQL_OT_DUAL = `
   LEFT JOIN verses v ON v.book_id = hv.book_id AND v.chapter = hv.chapter
         AND v.verse = hv.verse AND v.translation = ?3
   LEFT JOIN tokens t ON t.book_id = hv.book_id AND t.chapter = hv.chapter
-        AND t.verse = hv.verse AND t.corpus IN ('WLC', 'LXX')
+        AND t.verse = hv.verse AND (
+          (b.testament = 'OT' AND t.corpus IN ('WLC', 'LXX')) OR
+          (b.testament = 'NT' AND t.corpus = 'GNT')
+        )
   ORDER BY hv.book_id, hv.chapter, hv.verse,
            CASE t.corpus WHEN 'WLC' THEN 0 ELSE 1 END, t.word_num
+`;
+
+// Count verse hits before applying the result limit; group by book for filtering.
+const COUNT_SQL_ENG = `
+  SELECT b.abbr3, COUNT(*)
+  FROM verses v
+  JOIN book_meta b ON b.id = v.book_id
+  WHERE v.translation = ?1
+    AND v.rowid IN (SELECT rowid FROM verses_fts WHERE verses_fts MATCH ?2)
+  GROUP BY b.abbr3
+`;
+
+const COUNT_SQL_TOKEN = `
+  SELECT b.abbr3, COUNT(*)
+  FROM (
+    SELECT DISTINCT t.book_id, t.chapter, t.verse
+    FROM tokens_fts f
+    JOIN tokens t ON t.rowid = f.rowid
+    WHERE tokens_fts MATCH ?1 AND t.corpus IN (?2, ?3)
+  ) h
+  JOIN book_meta b ON b.id = h.book_id
+  GROUP BY b.abbr3
 `;
 
 const LOOKUP_SQL = `
@@ -330,6 +357,14 @@ const LOOKUP_SQL = `
 const LOOKUP_LEMMA_SQL = `
   SELECT estrong, dstrong, ustrong, lang, lemma, translit, morph, gloss, meaning_plain
   FROM lex_brief WHERE lang = ?2 AND lemma = ?1 LIMIT 1
+`;
+
+const SEARCH_DEFINITIONS_SQL = `
+  SELECT estrong, dstrong, ustrong, lang, lemma, translit, morph, gloss, meaning_plain
+  FROM lex_brief
+  WHERE lang IN ('Heb', 'Grk')
+    AND (gloss LIKE ?1 ESCAPE '\\' OR meaning_plain LIKE ?1 ESCAPE '\\')
+  ORDER BY lang, lemma, estrong, dstrong
 `;
 
 const CHAPTER_SQL = `
@@ -429,7 +464,7 @@ function makeToken(row: any[], qLow: string, corpus: string) {
     surface: row[7] ?? '', translit: row[8] ?? '', gloss: row[9] ?? '',
     root: row[10] ?? null, strong: row[11] ?? null, lemma: row[10] ?? null,
     form: row[12] ?? null, corpus: corpus as 'WLC' | 'GNT' | 'LXX',
-    highlight: gloss.includes(qLow) || translitNorm.includes(qNorm) || surfaceNorm.includes(qNorm),
+    highlight: qLow.length > 0 && (gloss.includes(qLow) || translitNorm.includes(qNorm) || surfaceNorm.includes(qNorm)),
   };
 }
 
@@ -486,24 +521,42 @@ function toResults(verses: any[], query: string, source: Source) {
   });
 }
 
-function execSearch(source: Source, query: string) {
+function execSearch(source: Source, query: string, combineGreek = true, maxHits: number | null = 200) {
+  const limit = maxHits === null ? -1 :
+    Number.isSafeInteger(maxHits) && maxHits > 0 ? maxHits : 200;
   if (!db) throw new Error('DB not ready');
-  const fts = ftsEscape(query);
+  // The lexicon/LXX use oxia while GNT uses tonos. unicode61 preserves Greek
+  // accents, so search both equivalent precomposed spellings of the lemma.
+  const canonical = query.normalize('NFC');
+  const tonos = 'άέήίόύώΆΈΉΊΌΎΏ';
+  const oxia = 'άέήίόύώΆΈΉΊΌΎΏ';
+  const polytonic = canonical.replace(/[άέήίόύώΆΈΉΊΌΎΏ]/g, (char) => oxia[tonos.indexOf(char)]);
+  const fts = [...new Set([query, canonical, polytonic])].map(ftsEscape).join(' OR ');
   let rows: any[][];
+  let counts: any[][];
 
   if (ENG_SOURCES.has(source)) {
-    rows = db.exec(VERSE_SQL_ENG, { bind: [source, fts], returnValue: 'resultRows' });
-  } else if (source === 'Heb' || source === 'LXX') {
+    rows = db.exec(VERSE_SQL_ENG, { bind: [source, fts, null, limit], returnValue: 'resultRows' });
+    counts = db.exec(COUNT_SQL_ENG, { bind: [source, fts], returnValue: 'resultRows' });
+  } else if (source === 'Heb' || source === 'LXX' || (source === 'GNT' && combineGreek)) {
     // OT sources: fetch both WLC and LXX tokens so the card can show both.
     const hitCorpus = source === 'Heb' ? 'WLC' : 'LXX';
-    rows = db.exec(VERSE_SQL_OT_DUAL, { bind: [fts, hitCorpus, 'NASB'], returnValue: 'resultRows' });
+    const secondCorpus = combineGreek && source !== 'Heb' ? 'GNT' : hitCorpus;
+    rows = db.exec(VERSE_SQL_OT_DUAL, { bind: [fts, hitCorpus, 'NASB', limit, secondCorpus], returnValue: 'resultRows' });
+    counts = db.exec(COUNT_SQL_TOKEN, { bind: [fts, hitCorpus, secondCorpus], returnValue: 'resultRows' });
   } else if (source === 'GNT') {
-    rows = db.exec(VERSE_SQL_TOKEN, { bind: [fts, 'GNT', 'NASB'], returnValue: 'resultRows' });
+    rows = db.exec(VERSE_SQL_TOKEN, { bind: [fts, 'GNT', 'NASB', limit], returnValue: 'resultRows' });
+    counts = db.exec(COUNT_SQL_TOKEN, { bind: [fts, 'GNT', 'GNT'], returnValue: 'resultRows' });
   } else {
     rows = [];
+    counts = [];
   }
 
-  return toResults(groupRows(rows, query), query, source);
+  return {
+    results: toResults(groupRows(rows, query), query, source),
+    totalHits: counts.reduce((total, row) => total + Number(row[1]), 0),
+    hitsByBook: Object.fromEntries(counts.map(([book, count]) => [book, Number(count)])),
+  };
 }
 
 function rowToLex(row: any[]) {
@@ -521,6 +574,20 @@ function execLookupLemma(lemma: string, lang: 'Heb' | 'Grk') {
   if (!db) throw new Error('DB not ready');
   const rows: any[][] = db.exec(LOOKUP_LEMMA_SQL, { bind: [lemma, lang], returnValue: 'resultRows' });
   return rows.length ? rowToLex(rows[0]) : null;
+}
+
+function execSearchDefinitions(word: string) {
+  if (!db) throw new Error('DB not ready');
+  const term = word.trim().toLowerCase();
+  if (!term) return [];
+  const pattern = '%' + term.replace(/[\\%_]/g, '\\$&') + '%';
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matchWord = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu');
+  const rows: any[][] = db.exec(SEARCH_DEFINITIONS_SQL, { bind: [pattern], returnValue: 'resultRows' });
+  // Match whole English words so "love" does not match "cloven" or "beloved" alone.
+  return rows.map(rowToLex).filter((entry) =>
+    matchWord.test(entry.gloss ?? '') || matchWord.test(entry.meaning ?? ''),
+  );
 }
 
 function execFetchChapter(abbr3: string, chapter: number, translation: string): { verses: { verse: number; text: string }[]; totalChapters: number } {
@@ -564,6 +631,57 @@ function execFetchChapterOriginals(abbr3: string, chapter: number, testament: 'O
   }));
 }
 
+function execReferenceSearch(query: string) {
+  if (!db) throw new Error('DB not ready');
+  const parsed = parseReferenceQuery(query);
+  if (!parsed) throw new Error('Not a reference query');
+  const errors = [...parsed.errors];
+  const results: ReturnType<typeof toResults> = [];
+  const seen = new Set<string>();
+  const chapters = new Map<string, ReturnType<typeof execFetchChapter>>();
+  const originals = new Map<string, ReturnType<typeof execFetchChapterOriginals>>();
+  const hitsByBook: Record<string, number> = {};
+
+  for (const range of parsed.ranges) {
+    const metaRows: any[][] = db.exec('SELECT abbr3, name, testament FROM book_meta WHERE id = ?1', {
+      bind: [range.bookId], returnValue: 'resultRows',
+    });
+    const [abbr3, name, testament] = metaRows[0];
+    const loadChapter = (chapter: number) => {
+      const key = `${abbr3}:${chapter}`;
+      if (!chapters.has(key)) chapters.set(key, execFetchChapter(abbr3, chapter, 'NASB'));
+      return chapters.get(key)!;
+    };
+    const first = loadChapter(range.startChapter);
+    const last = loadChapter(range.endChapter);
+    if (!first.verses.length || !last.verses.length ||
+      (range.startVerse !== null && !first.verses.some((v) => v.verse === range.startVerse)) ||
+      (range.endVerse !== null && !last.verses.some((v) => v.verse === range.endVerse))) {
+      errors.push(`Verse or chapter not found: ${range.raw}`);
+      continue;
+    }
+    for (let chapter = range.startChapter; chapter <= range.endChapter; chapter++) {
+      const key = `${abbr3}:${chapter}`;
+      if (!originals.has(key)) originals.set(key, execFetchChapterOriginals(abbr3, chapter, testament));
+      for (const verse of loadChapter(chapter).verses) {
+        if (chapter === range.startChapter && range.startVerse !== null && verse.verse < range.startVerse) continue;
+        if (chapter === range.endChapter && range.endVerse !== null && verse.verse > range.endVerse) continue;
+        const verseKey = `${key}:${verse.verse}`;
+        if (seen.has(verseKey)) continue;
+        seen.add(verseKey);
+        results.push({
+          ref: `${abbr3} ${chapter}:${verse.verse}`, book: name, bookAbbr: abbr3,
+          testament, chapter, verse: verse.verse, lang: testament === 'OT' ? 'Heb' : 'Grk',
+          source: 'NASB', english: verse.text, matchWord: '',
+          originals: originals.get(key)!.find((v) => v.verse === verse.verse)?.originals ?? [],
+        });
+        hitsByBook[abbr3] = (hitsByBook[abbr3] ?? 0) + 1;
+      }
+    }
+  }
+  return { results, totalHits: results.length, hitsByBook, errors };
+}
+
 
 // ─── message dispatch ─────────────────────────────────────────────────────────
 
@@ -571,11 +689,15 @@ self.addEventListener('message', (e: MessageEvent) => {
   const msg = e.data as { id: string; type: string; [k: string]: any };
   try {
     if (msg.type === 'search') {
-      post({ id: msg.id, ok: true, data: execSearch(msg.source as Source, msg.query) });
+      post({ id: msg.id, ok: true, data: execSearch(msg.source as Source, msg.query, msg.combineGreek, msg.maxHits) });
+    } else if (msg.type === 'search_references') {
+      post({ id: msg.id, ok: true, data: execReferenceSearch(msg.query) });
     } else if (msg.type === 'lookup') {
       post({ id: msg.id, ok: true, data: execLookup(msg.strong) });
     } else if (msg.type === 'lookup_lemma') {
       post({ id: msg.id, ok: true, data: execLookupLemma(msg.lemma, msg.lang) });
+    } else if (msg.type === 'search_definitions') {
+      post({ id: msg.id, ok: true, data: execSearchDefinitions(msg.word) });
     } else if (msg.type === 'fetch_chapter') {
       post({ id: msg.id, ok: true, data: execFetchChapter(msg.abbr3, msg.chapter, msg.translation) });
     } else if (msg.type === 'fetch_chapter_originals') {
