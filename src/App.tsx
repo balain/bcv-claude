@@ -315,9 +315,23 @@ export default function App() {
     [testamentResults, activeBook],
   );
 
-  const filteredTotalHits = activeBook ? hitsByBook[activeBook] ?? 0 : activeTestament ?
-    Object.entries(hitsByBook).reduce((total, [book, count]) =>
-      total + (BOOK_BY_ABBR3.get(book)?.testament === activeTestament ? count : 0), 0) : totalHits;
+  const testamentHitTotals = useMemo(() => {
+    const totals = { OT: 0, NT: 0 };
+    for (const [book, count] of Object.entries(hitsByBook)) {
+      const testament = BOOK_BY_ABBR3.get(book)?.testament;
+      if (testament) totals[testament] += count;
+    }
+    return totals;
+  }, [hitsByBook]);
+
+  const showBookBreakdown = activeBook !== null &&
+    testamentHitTotals.OT > 0 && testamentHitTotals.NT > 0;
+  const showTestamentTotal = activeBook === null && activeTestament !== null;
+  const filteredTotalHits = activeBook ? hitsByBook[activeBook] ?? 0 :
+    totalHits;
+  const hitSummary = showBookBreakdown ?
+    `${filtered.length} of ${testamentHitTotals.OT}/${testamentHitTotals.NT}/${totalHits} hits` :
+    `${filtered.length}${searchSettings.maxHits !== null || showTestamentTotal ? ` of ${filteredTotalHits}` : ""} hits`;
 
   const books = useMemo<BookNavItem[]>(() => {
     const seen = new Set<string>();
@@ -525,6 +539,7 @@ export default function App() {
             onToggle={() => setSearchCollapsed((v) => !v)}
             query={query}
             source={source}
+            combineGreek={searchSettings.combineGreek}
             onGo={onGo}
           />
 
@@ -561,6 +576,7 @@ export default function App() {
                 {query || "—"}
               </span>
               <span
+                title={showBookBreakdown ? 'Returned hits in selected book of OT / NT / total hits' : undefined}
                 style={{
                   fontSize: "var(--fs-body)",
                   color: "var(--ink-light)",
@@ -569,7 +585,7 @@ export default function App() {
               >
                 {isLoading
                   ? dbMessage || "Loading…"
-                  : `${filtered.length}${searchSettings.maxHits !== null ? ` of ${filteredTotalHits}` : ""} hits · ${searchSettings.combineGreek && (source === "LXX" || source === "GNT") ? "LXX + GNT" : source}`}
+                  : `${hitSummary} · ${searchSettings.combineGreek && (source === "LXX" || source === "GNT") ? "LXX + GNT" : source}`}
               </span>
               {!isLoading && ENG_SOURCES.has(source) && /^[a-z]+(?:['’-][a-z]+)*$/i.test(query.trim()) && (
                 <button
