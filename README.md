@@ -9,10 +9,12 @@ A fast, offline-capable Bible search tool with interlinear Hebrew and Greek, bui
 - **Interlinear display** — every result card shows the underlying Hebrew (WLC) and/or Greek (LXX / GNT) text alongside the English translation
 - **Dual OT interlinear** — OT verses show both the Masoretic (WLC) and Septuagint (LXX) in parallel
 - **Word lookup** — tap any Hebrew or Greek word chip to see its lemma, transliteration, Strong's number, gloss, and full lexical definition
+- **English Strong's lookup** — select Strong's beside a single-word English search to browse all Hebrew and Greek lexicon definitions containing that word, then select a lemma to search it.
 - **Lemma / form search** — search from within a word-lookup card to find all occurrences of a root or inflected form
 - **GlossCard** — single-word original-language searches display the word's gloss and meaning above the result list
 - **Chapter view** — click any Book:Chapter:Verse reference to read the full NASB chapter, with prev/next chapter navigation and optional original-language interlinear per verse
 - **Search history** — quick access to your recent searches, persisted locally
+- **Search settings** — open the gear button to configure combined LXX/GNT searches (enabled by default) and the maximum number of verse hits (200 by default, or unlimited). Preferences are saved locally and apply to searches from word definitions too.
 - **Class Mode** — a specialized workspace for teachers and students to manage series, sessions, scripture references, and study notes with a dedicated local database
 - **Distribution chart** — optional bar chart showing hit density across the biblical canon
 - **Book filter** — click any book pill to narrow results to a single book

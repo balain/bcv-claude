@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import type { ReactNode } from 'react';
 import type { Testament } from '../types';
 
 export interface BookNavItem {
@@ -10,9 +11,10 @@ interface Props {
   books: BookNavItem[];
   active: string | null;
   onSelect: (name: string | null) => void;
+  prefix?: ReactNode;
 }
 
-export function BookNav({ books, active, onSelect }: Props) {
+export function BookNav({ books, active, onSelect, prefix }: Props) {
   if (books.length === 0) return null;
 
   return (
@@ -27,6 +29,8 @@ export function BookNav({ books, active, onSelect }: Props) {
         alignItems: 'center',
       }}
     >
+      {prefix}
+      {prefix && <div style={{ width: 1, height: 18, background: 'var(--border)', flexShrink: 0, margin: '0 4px' }} />}
       <button
         onClick={() => onSelect(null)}
         style={{
@@ -43,7 +47,7 @@ export function BookNav({ books, active, onSelect }: Props) {
           color: active === null ? '#fff' : 'var(--ink-light)',
         }}
       >
-        All
+        {prefix ? 'All books' : 'All'}
       </button>
       {books.map(({ name, t }, i) => {
         const isActive = active === name;

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SearchBar } from "./components/SearchBar";
 import { BookNav } from "./components/BookNav";
+import { TestamentFilter } from "./components/TestamentFilter";
 import type { BookNavItem } from "./components/BookNav";
 import { MiniChart } from "./components/MiniChart";
 import { GlossCard } from "./components/GlossCard";
 import { ResultCard } from "./components/ResultCard";
 import { DefinitionSheet } from "./components/DefinitionSheet";
+import { EnglishStrongsPopup } from "./components/EnglishStrongsPopup";
 import { ChapterView } from "./components/ChapterView";
 import { BcvBrowser } from "./components/BcvBrowser";
 import { SearchHistory } from "./components/SearchHistory";
@@ -14,7 +16,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { computeDistribution } from "./lib/search";
 import { dbClient } from "./lib/db";
 import type { DBStatus, LexEntry } from "./lib/db";
-import type { Lang, Source, WordToken, BibleResult, Bookmark } from "./types";
+import type { Lang, Source, Testament, WordToken, BibleResult, Bookmark } from "./types";
 import { ClassMode } from "./components/class/ClassMode";
 import { initClassClient, getClassClient } from "./lib/class/client";
 import { BOOK_BY_ID, BOOK_BY_ABBR3 } from "./lib/books";
@@ -24,6 +26,7 @@ import { getCrossRefsBulk } from "./lib/crossRefs";
 import { readThemePref, saveThemePref, initTheme, resolveTheme } from "./lib/theme";
 import type { ThemePref } from "./lib/theme";
 import { useFontSize } from "./lib/useFontSize";
+import { readSearchSettings } from "./lib/searchSettings";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -42,7 +45,16 @@ export default function App() {
   const [selectedWord, setSelectedWord] = useState<WordToken | null>(null);
   const [selectedLang, setSelectedLang] = useState<Lang | null>(null);
   const [activeBook, setActiveBook] = useState<string | null>(null);
+  const [activeTestament, setActiveTestament] = useState<Testament | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [englishStrongsWord, setEnglishStrongsWord] = useState<string | null>(null);
+  const [searchSettings, setSearchSettings] = useState(readSearchSettings);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('bcv-search-settings', JSON.stringify(searchSettings));
+    } catch { /* Storage may be unavailable. */ }
+  }, [searchSettings]);
 
   // ─── Font size ───────────────────────────────────────────────────────────
   const [fontSizePref, setFontSizePref] = useFontSize();
@@ -67,6 +79,8 @@ export default function App() {
   void resolvedTheme;
 
   const [results, setResults] = useState<BibleResult[]>([]);
+  const [totalHits, setTotalHits] = useState(0);
+  const [hitsByBook, setHitsByBook] = useState<Record<string, number>>({});
   const [crossRefMap, setCrossRefMap] = useState<Map<string, CrossRef[]>>(new Map());
   // Seed from current singleton status so we don't miss events that fired before mount
   const [dbStatus, setDbStatus] = useState<DBStatus>(dbClient.status);
@@ -198,11 +212,16 @@ export default function App() {
       const ctrl = new AbortController();
       searchAbort.current = ctrl;
       try {
-        const r = await dbClient.search(q, s);
+        const r = await dbClient.search(q, s, searchSettings);
         if (ctrl.signal.aborted) return;
-        setResults(r);
+        setResults(r.results);
+        setTotalHits(r.totalHits);
+        setHitsByBook(r.hitsByBook);
+        setActiveTestament((current) =>
+          current && !r.results.some((result) => result.testament === current) ? null : current,
+        );
         // Fetch cross-refs for all results after search settles
-        const verses = r.map((res) => ({
+        const verses = r.results.map((res) => ({
           bookId: BOOK_BY_ABBR3.get(res.bookAbbr)?.id ?? 0,
           chapter: res.chapter,
           verse: res.verse,
@@ -216,7 +235,7 @@ export default function App() {
         if (!ctrl.signal.aborted) console.error("Search error", e);
       }
     },
-    [dbStatus],
+    [dbStatus, searchSettings],
   );
 
   useEffect(() => {
@@ -250,11 +269,11 @@ export default function App() {
       return;
     }
 
-    const targetCorpus =
-      source === "Heb" ? "WLC" : source === "LXX" ? "LXX" : "GNT";
+    const targetCorpora = source === "Heb" ? ["WLC"] :
+      searchSettings.combineGreek ? ["LXX", "GNT"] : [source];
     let token: WordToken | undefined;
     for (const r of results) {
-      const section = r.originals.find((s) => s.corpus === targetCorpus);
+      const section = r.originals.find((s) => targetCorpora.includes(s.corpus));
       if (section) {
         token = section.tokens.find((t) => t.highlight);
         if (token) break;
@@ -280,19 +299,31 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [source, query, results]);
+  }, [source, query, results, searchSettings.combineGreek]);
+
+  const hasBothTestaments = results.some((r) => r.testament === "OT") &&
+    results.some((r) => r.testament === "NT");
+
+  const testamentResults = useMemo(
+    () => activeTestament ? results.filter((r) => r.testament === activeTestament) : results,
+    [results, activeTestament],
+  );
 
   const filtered = useMemo(
     () =>
-      activeBook ? results.filter((r) => r.bookAbbr === activeBook) : results,
-    [results, activeBook],
+      activeBook ? testamentResults.filter((r) => r.bookAbbr === activeBook) : testamentResults,
+    [testamentResults, activeBook],
   );
+
+  const filteredTotalHits = activeBook ? hitsByBook[activeBook] ?? 0 : activeTestament ?
+    Object.entries(hitsByBook).reduce((total, [book, count]) =>
+      total + (BOOK_BY_ABBR3.get(book)?.testament === activeTestament ? count : 0), 0) : totalHits;
 
   const books = useMemo<BookNavItem[]>(() => {
     const seen = new Set<string>();
     const out: BookNavItem[] = [];
-    const ot = results.filter((r) => r.testament === "OT");
-    const nt = results.filter((r) => r.testament === "NT");
+    const ot = testamentResults.filter((r) => r.testament === "OT");
+    const nt = testamentResults.filter((r) => r.testament === "NT");
     for (const r of [...ot, ...nt]) {
       if (!seen.has(r.bookAbbr)) {
         seen.add(r.bookAbbr);
@@ -300,14 +331,18 @@ export default function App() {
       }
     }
     return out;
-  }, [results]);
+  }, [testamentResults]);
 
-  const distribution = useMemo(() => computeDistribution(results), [results]);
+  const distribution = useMemo(() => computeDistribution(testamentResults), [testamentResults]);
 
   const onGo = (q: string, s: Source) => {
+    location.hash = "";
+    setMode("search");
     setQuery(q);
     setSource(s);
     setActiveBook(null);
+    setActiveTestament(null);
+    setEnglishStrongsWord(null);
     // Record in history — deduplicate (remove prior occurrence of same query+source),
     // prepend, and cap at 30 entries.
     setSearchHistory((prev) => {
@@ -467,6 +502,7 @@ export default function App() {
         <BcvBrowser
           browsePos={browsePos}
           onNavigate={handleBrowseNavigate}
+          onSearch={onGo}
           bookmarks={bookmarks}
           onBookmark={addBookmark}
           onRemoveBookmark={removeBookmark}
@@ -533,19 +569,15 @@ export default function App() {
               >
                 {isLoading
                   ? dbMessage || "Loading…"
-                  : `${filtered.length} hits · ${source}`}
+                  : `${filtered.length}${searchSettings.maxHits !== null ? ` of ${filteredTotalHits}` : ""} hits · ${searchSettings.combineGreek && (source === "LXX" || source === "GNT") ? "LXX + GNT" : source}`}
               </span>
-              {!isLoading && results.length >= 200 && (
-                <span
-                  style={{
-                    fontSize: "var(--fs-meta)",
-                    color: "var(--amber)",
-                    fontFamily: "DM Sans",
-                    fontWeight: 600,
-                  }}
+              {!isLoading && ENG_SOURCES.has(source) && /^[a-z]+(?:['’-][a-z]+)*$/i.test(query.trim()) && (
+                <button
+                  onClick={() => setEnglishStrongsWord(query.trim())}
+                  style={{ border: '1px solid var(--border)', borderRadius: 20, padding: '5px 12px', background: 'var(--surface)', color: 'var(--indigo)', fontSize: 'var(--fs-control)', fontWeight: 600, cursor: 'pointer' }}
                 >
-                  ⚠ capped at 200
-                </span>
+                  Strong’s
+                </button>
               )}
             </div>
 
@@ -581,11 +613,20 @@ export default function App() {
                   books={books}
                   active={activeBook}
                   onSelect={setActiveBook}
+                  prefix={hasBothTestaments && (
+                    <TestamentFilter
+                      active={activeTestament}
+                      onSelect={(testament) => {
+                        setActiveTestament(testament);
+                        setActiveBook(null);
+                      }}
+                    />
+                  )}
                 />
                 <MiniChart
                   visible={showChart}
                   bars={distribution}
-                  totalHits={results.length}
+                  totalHits={testamentResults.length}
                 />
 
                 {glossEntry && (
@@ -727,6 +768,16 @@ export default function App() {
         />
       )}
 
+      {englishStrongsWord && (
+        <EnglishStrongsPopup
+          key={englishStrongsWord}
+          word={englishStrongsWord}
+          combineGreek={searchSettings.combineGreek}
+          onClose={() => setEnglishStrongsWord(null)}
+          onSearch={onGo}
+        />
+      )}
+
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -734,6 +785,8 @@ export default function App() {
         onThemeChange={handleThemeChange}
         fontSizePref={fontSizePref}
         onFontSizeChange={setFontSizePref}
+        searchSettings={searchSettings}
+        onSearchSettingsChange={setSearchSettings}
       />
     </div>
   );

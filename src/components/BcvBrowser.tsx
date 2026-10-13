@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { BOOK_META, BOOK_BY_ID } from '../lib/books';
 import { parseRefs } from '../lib/class/refParser';
 import { getClassClient } from '../lib/class/client';
-import type { Bookmark } from '../types';
+import type { Bookmark, Source } from '../types';
 import { ChapterView } from './ChapterView';
 
 interface Props {
   browsePos: { bookId: number; chapter: number; verse: number } | null;
   onNavigate: (bookId: number, chapter: number, verse: number) => void;
+  onSearch: (query: string, source: Source) => void;
   bookmarks: Bookmark[];
   onBookmark: (bookId: number, chapter: number, verse: number, label: string) => void;
   onRemoveBookmark: (id: string) => void;
@@ -27,7 +28,7 @@ function formatPos(bookId: number, chapter: number, verse: number): string {
 }
 
 export function BcvBrowser({
-  browsePos, onNavigate, bookmarks, onBookmark, onRemoveBookmark, isBookmarked, onOpenClass,
+  browsePos, onNavigate, onSearch, bookmarks, onBookmark, onRemoveBookmark, isBookmarked, onOpenClass,
   returnUrl, onReturn,
 }: Props) {
   const [passageInput, setPassageInput] = useState('');
@@ -333,7 +334,7 @@ export function BcvBrowser({
               highlightVerse={browsePos!.verse}
               testament={currentBook.testament}
               onClose={() => setSelectedBookId(null)}
-              onSearch={() => {}}
+              onSearch={onSearch}
               onBookmark={onBookmark}
               isBookmarked={isBookmarked}
               versesWithNotes={versesWithNotes}

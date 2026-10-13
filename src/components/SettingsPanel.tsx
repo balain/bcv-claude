@@ -1,5 +1,6 @@
 import type { ThemePref } from '../lib/theme';
 import type { FontSizePref } from '../lib/useFontSize';
+import type { SearchSettings } from '../lib/searchSettings';
 
 interface Props {
   open: boolean;
@@ -8,6 +9,8 @@ interface Props {
   onThemeChange: (pref: ThemePref) => void;
   fontSizePref: FontSizePref;
   onFontSizeChange: (pref: FontSizePref) => void;
+  searchSettings: SearchSettings;
+  onSearchSettingsChange: (settings: SearchSettings) => void;
 }
 
 const THEME_OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
@@ -23,7 +26,7 @@ const FONT_SIZE_OPTIONS: { value: FontSizePref; label: string; icon: string }[] 
   { value: 'extra-large', label: 'X-Large', icon: 'A' },
 ];
 
-export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSizePref, onFontSizeChange }: Props) {
+export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSizePref, onFontSizeChange, searchSettings, onSearchSettingsChange }: Props) {
   if (!open) return null;
 
   return (
@@ -56,11 +59,11 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
           position: 'relative',
           width: '100%',
           background: 'var(--surface)',
-          borderRadius: '20px 20px 0 0',
+          height: '100%',
           padding: '0 0 40px',
           animation: 'sheetIn 0.28s cubic-bezier(0.34, 1.4, 0.64, 1)',
           boxShadow: 'var(--shadow-lg)',
-          maxHeight: '80%',
+          boxSizing: 'border-box',
           overflowY: 'auto',
         }}
       >
@@ -112,6 +115,54 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
 
         {/* Divider */}
         <div style={{ margin: '12px 20px 0', borderTop: '1px solid var(--border)' }} />
+
+        {/* Theme section */}
+        <section style={{ padding: '16px 20px', color: 'var(--ink)', fontFamily: 'DM Sans', fontSize: 'var(--fs-body)' }}>
+          <h2 style={{ fontSize: 'var(--fs-control)', margin: '0 0 16px' }}>Search</h2>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input
+              type="checkbox"
+              checked={searchSettings.combineGreek}
+              onChange={(e) => onSearchSettingsChange({ ...searchSettings, combineGreek: e.target.checked })}
+            />
+            Search LXX and GNT together
+          </label>
+          <p style={{ color: 'var(--ink-mid)', fontSize: 'var(--fs-meta)' }}>
+            Selecting either Greek source searches both Testaments, including searches from word definitions.
+          </p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>
+            <input
+              type="checkbox"
+              checked={searchSettings.maxHits === null}
+              onChange={(e) => onSearchSettingsChange({ ...searchSettings, maxHits: e.target.checked ? null : 200 })}
+            />
+            Unlimited hits
+          </label>
+          {searchSettings.maxHits !== null && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+              Maximum hits
+              <input
+                type="number"
+                min={1}
+                step={1}
+                required
+                defaultValue={searchSettings.maxHits}
+                onBlur={(e) => {
+                  const maxHits = e.target.valueAsNumber;
+                  if (Number.isSafeInteger(maxHits) && maxHits > 0) {
+                    onSearchSettingsChange({ ...searchSettings, maxHits });
+                  } else {
+                    e.target.value = String(searchSettings.maxHits);
+                  }
+                }}
+                style={{ width: 110, padding: 8, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface-muted)', color: 'var(--ink)', fontSize: 'inherit' }}
+              />
+            </label>
+          )}
+          <p style={{ color: 'var(--ink-mid)', fontSize: 'var(--fs-meta)' }}>
+            Limits apply to all searches. Unlimited searches may take longer to display.
+          </p>
+        </section>
 
         {/* Theme section */}
         <div style={{ padding: '16px 20px 0' }}>

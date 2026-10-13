@@ -4,6 +4,7 @@
  */
 
 import type { BibleResult, Source } from '../types';
+import { DEFAULT_SEARCH_SETTINGS, type SearchSettings } from './searchSettings';
 
 type WorkerReply =
   | { id: string; ok: true; data: any }
@@ -15,6 +16,12 @@ type WorkerReply =
 export type DBStatus = 'initializing' | 'progress' | 'ready' | 'error';
 
 type StatusListener = (status: DBStatus, message?: string) => void;
+
+export interface SearchResponse {
+  results: BibleResult[];
+  totalHits: number;
+  hitsByBook: Record<string, number>;
+}
 
 class DBClient {
   private worker: Worker;
@@ -71,8 +78,8 @@ class DBClient {
     });
   }
 
-  search(query: string, source: Source): Promise<BibleResult[]> {
-    return this.call({ type: 'search', query, source });
+  search(query: string, source: Source, settings: SearchSettings = DEFAULT_SEARCH_SETTINGS): Promise<SearchResponse> {
+    return this.call({ type: 'search', query, source, ...settings });
   }
 
   lookup(strong: string): Promise<LexEntry | null> {
@@ -81,6 +88,10 @@ class DBClient {
 
   lookupByLemma(lemma: string, lang: 'Heb' | 'Grk'): Promise<LexEntry | null> {
     return this.call({ type: 'lookup_lemma', lemma, lang });
+  }
+
+  searchDefinitions(word: string): Promise<LexEntry[]> {
+    return this.call({ type: 'search_definitions', word });
   }
 
   fetchChapter(abbr3: string, chapter: number): Promise<ChapterFetchResult> {
