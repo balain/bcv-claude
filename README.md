@@ -140,3 +140,12 @@ bcv-claude/
 Application source code: [MIT](LICENSE)
 
 Bible texts and lexicon data: see [Data Sources](#data-sources) above.
+
+### Dependency maintenance
+
+Both npm and pnpm lockfiles are supported. When changing dependencies or security
+overrides, update both `package-lock.json` and `pnpm-lock.yaml` using
+`npm install --package-lock-only` and `pnpm install --lockfile-only` (pnpm 10.32.1).
+Keep `overrides` and `pnpm.overrides` in `package.json` synchronized.
+CI validates clean installs, security audits, and production builds with both
+package managers. Lint is currently informational until existing errors are fixed.
