@@ -98,6 +98,7 @@ export default function App() {
   // Seed from current singleton status so we don't miss events that fired before mount
   const [dbStatus, setDbStatus] = useState<DBStatus>(dbClient.status);
   const [dbMessage, setDbMessage] = useState("");
+  const [searchError, setSearchError] = useState("");
   const searchAbort = useRef<AbortController | null>(null);
 
   // Search history — persisted to localStorage
@@ -211,6 +212,7 @@ export default function App() {
   useEffect(() => {
     // Re-sync in case status changed between useState init and effect run
     setDbStatus(dbClient.status);
+    setDbMessage(dbClient.statusMessage);
     return dbClient.onStatus((status, message) => {
       setDbStatus(status);
       if (message) setDbMessage(message);
@@ -224,6 +226,7 @@ export default function App() {
       searchAbort.current?.abort();
       const ctrl = new AbortController();
       searchAbort.current = ctrl;
+      setSearchError("");
       try {
         const r = await dbClient.search(q, s, searchSettings);
         if (ctrl.signal.aborted) return;
@@ -246,7 +249,10 @@ export default function App() {
           if (!ctrl.signal.aborted) setCrossRefMap(map);
         }).catch(() => {});
       } catch (e) {
-        if (!ctrl.signal.aborted) console.error("Search error", e);
+        if (!ctrl.signal.aborted) {
+          console.error("Search error", e);
+          setSearchError(e instanceof Error ? e.message : String(e));
+        }
       }
     },
     [dbStatus, searchSettings],
@@ -637,6 +643,12 @@ export default function App() {
               </div>
             )}
 
+            {(dbStatus === "error" || searchError) && (
+              <div role="alert" style={{ padding: 16, marginBottom: 12, border: '1px solid var(--amber)', borderRadius: 8, background: 'var(--amber-bg)', color: 'var(--ink)' }}>
+                <strong>{dbStatus === "error" ? "Database could not load" : "Search failed"}</strong>
+                <p>{dbStatus === "error" ? dbMessage || "The database worker could not start. Reload the page." : searchError}</p>
+              </div>
+            )}
             {isLoading ? (
               <div
                 style={{

@@ -64,6 +64,17 @@ npm run build
 The output in `dist/` is a static site. Serve it with any HTTPS host that can
 set the required security headers:
 
+When hosting under a subdirectory, set the base path when building. For
+`https://zqx6s.uber.space/bcv/`, use:
+
+```bash
+BASE_PATH=/bcv/ npm run build
+```
+
+Deploy the contents of `dist/` into the server's `/bcv/` directory, and serve
+`data/bcv.db` at `/bcv/db/bcv.db`. Rebuild whenever the hosting path changes;
+otherwise JavaScript URLs point to the site root and the page cannot start.
+
 ```
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Embedder-Policy: require-corp

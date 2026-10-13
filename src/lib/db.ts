@@ -31,6 +31,7 @@ class DBClient {
   private seq = 0;
   private statusListeners: StatusListener[] = [];
   public status: DBStatus = 'initializing';
+  public statusMessage = '';
 
   constructor() {
     this.worker = this.createWorker();
@@ -54,6 +55,7 @@ class DBClient {
 
   private setStatus(status: DBStatus, message?: string) {
     this.status = status;
+    this.statusMessage = message ?? '';
     for (const l of this.statusListeners) l(status, message);
   }
 
