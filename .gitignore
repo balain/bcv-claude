@@ -11,6 +11,7 @@ lerna-debug.log*
 CLAUDE.md
 
 justfile
+justfile.bak
 
 node_modules
 data
@@ -34,4 +35,6 @@ public/icons.svg
 docs/
 
 .env
+
+public/.htaccess
 
