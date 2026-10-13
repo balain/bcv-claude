@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:references": "node --test tests/referenceSearch.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

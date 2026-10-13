@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import type { Source } from '../types';
+import { parseReferenceQuery } from '../lib/referenceSearch';
 
 interface Props {
   collapsed: boolean;
@@ -25,6 +26,7 @@ const isPhrase = (q: string) => q.length >= 2 && q.startsWith('"') && q.endsWith
 export function SearchBar({ collapsed, onToggle, query, source, combineGreek, onGo }: Props) {
   const [draft, setDraft] = useState(query);
   const [localSource, setLocalSource] = useState<Source>(source);
+  const displaySource = parseReferenceQuery(draft) ? 'NASB' : localSource;
 
   useEffect(() => setDraft(query), [query]);
   useEffect(() => setLocalSource(source), [source]);
@@ -124,7 +126,7 @@ export function SearchBar({ collapsed, onToggle, query, source, combineGreek, on
               fontFamily: 'DM Sans',
               minWidth: 0,
             }}
-            placeholder="Search…"
+            placeholder="Search words or references (John 3:16; Jude 3)…"
           />
           {draft && (
             <span
@@ -155,8 +157,8 @@ export function SearchBar({ collapsed, onToggle, query, source, combineGreek, on
 
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
         {SOURCES.map(({ id, group }, i, arr) => {
-          const isActive = localSource === id || (
-            combineGreek && (localSource === 'LXX' || localSource === 'GNT') &&
+          const isActive = displaySource === id || (
+            combineGreek && (displaySource === 'LXX' || displaySource === 'GNT') &&
             (id === 'LXX' || id === 'GNT')
           );
           const isOrig = group === 'orig';

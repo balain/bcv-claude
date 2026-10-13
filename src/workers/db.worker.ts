@@ -19,6 +19,7 @@
  */
 
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import { parseReferenceQuery } from '../lib/referenceSearch';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — Vite resolves this to the correct URL at both dev and build time
 import sqlite3WasmUrl from '@sqlite.org/sqlite-wasm/sqlite3.wasm?url';
@@ -463,7 +464,7 @@ function makeToken(row: any[], qLow: string, corpus: string) {
     surface: row[7] ?? '', translit: row[8] ?? '', gloss: row[9] ?? '',
     root: row[10] ?? null, strong: row[11] ?? null, lemma: row[10] ?? null,
     form: row[12] ?? null, corpus: corpus as 'WLC' | 'GNT' | 'LXX',
-    highlight: gloss.includes(qLow) || translitNorm.includes(qNorm) || surfaceNorm.includes(qNorm),
+    highlight: qLow.length > 0 && (gloss.includes(qLow) || translitNorm.includes(qNorm) || surfaceNorm.includes(qNorm)),
   };
 }
 
@@ -630,6 +631,57 @@ function execFetchChapterOriginals(abbr3: string, chapter: number, testament: 'O
   }));
 }
 
+function execReferenceSearch(query: string) {
+  if (!db) throw new Error('DB not ready');
+  const parsed = parseReferenceQuery(query);
+  if (!parsed) throw new Error('Not a reference query');
+  const errors = [...parsed.errors];
+  const results: ReturnType<typeof toResults> = [];
+  const seen = new Set<string>();
+  const chapters = new Map<string, ReturnType<typeof execFetchChapter>>();
+  const originals = new Map<string, ReturnType<typeof execFetchChapterOriginals>>();
+  const hitsByBook: Record<string, number> = {};
+
+  for (const range of parsed.ranges) {
+    const metaRows: any[][] = db.exec('SELECT abbr3, name, testament FROM book_meta WHERE id = ?1', {
+      bind: [range.bookId], returnValue: 'resultRows',
+    });
+    const [abbr3, name, testament] = metaRows[0];
+    const loadChapter = (chapter: number) => {
+      const key = `${abbr3}:${chapter}`;
+      if (!chapters.has(key)) chapters.set(key, execFetchChapter(abbr3, chapter, 'NASB'));
+      return chapters.get(key)!;
+    };
+    const first = loadChapter(range.startChapter);
+    const last = loadChapter(range.endChapter);
+    if (!first.verses.length || !last.verses.length ||
+      (range.startVerse !== null && !first.verses.some((v) => v.verse === range.startVerse)) ||
+      (range.endVerse !== null && !last.verses.some((v) => v.verse === range.endVerse))) {
+      errors.push(`Verse or chapter not found: ${range.raw}`);
+      continue;
+    }
+    for (let chapter = range.startChapter; chapter <= range.endChapter; chapter++) {
+      const key = `${abbr3}:${chapter}`;
+      if (!originals.has(key)) originals.set(key, execFetchChapterOriginals(abbr3, chapter, testament));
+      for (const verse of loadChapter(chapter).verses) {
+        if (chapter === range.startChapter && range.startVerse !== null && verse.verse < range.startVerse) continue;
+        if (chapter === range.endChapter && range.endVerse !== null && verse.verse > range.endVerse) continue;
+        const verseKey = `${key}:${verse.verse}`;
+        if (seen.has(verseKey)) continue;
+        seen.add(verseKey);
+        results.push({
+          ref: `${abbr3} ${chapter}:${verse.verse}`, book: name, bookAbbr: abbr3,
+          testament, chapter, verse: verse.verse, lang: testament === 'OT' ? 'Heb' : 'Grk',
+          source: 'NASB', english: verse.text, matchWord: '',
+          originals: originals.get(key)!.find((v) => v.verse === verse.verse)?.originals ?? [],
+        });
+        hitsByBook[abbr3] = (hitsByBook[abbr3] ?? 0) + 1;
+      }
+    }
+  }
+  return { results, totalHits: results.length, hitsByBook, errors };
+}
+
 
 // ─── message dispatch ─────────────────────────────────────────────────────────
 
@@ -638,6 +690,8 @@ self.addEventListener('message', (e: MessageEvent) => {
   try {
     if (msg.type === 'search') {
       post({ id: msg.id, ok: true, data: execSearch(msg.source as Source, msg.query, msg.combineGreek, msg.maxHits) });
+    } else if (msg.type === 'search_references') {
+      post({ id: msg.id, ok: true, data: execReferenceSearch(msg.query) });
     } else if (msg.type === 'lookup') {
       post({ id: msg.id, ok: true, data: execLookup(msg.strong) });
     } else if (msg.type === 'lookup_lemma') {

@@ -5,6 +5,7 @@
 
 import type { BibleResult, Source } from '../types';
 import { DEFAULT_SEARCH_SETTINGS, type SearchSettings } from './searchSettings';
+import { parseReferenceQuery } from './referenceSearch';
 
 type WorkerReply =
   | { id: string; ok: true; data: any }
@@ -21,6 +22,7 @@ export interface SearchResponse {
   results: BibleResult[];
   totalHits: number;
   hitsByBook: Record<string, number>;
+  errors?: string[];
 }
 
 class DBClient {
@@ -79,6 +81,7 @@ class DBClient {
   }
 
   search(query: string, source: Source, settings: SearchSettings = DEFAULT_SEARCH_SETTINGS): Promise<SearchResponse> {
+    if (parseReferenceQuery(query)) return this.call({ type: 'search_references', query });
     return this.call({ type: 'search', query, source, ...settings });
   }
 

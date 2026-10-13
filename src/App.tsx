@@ -27,6 +27,7 @@ import { readThemePref, saveThemePref, initTheme, resolveTheme } from "./lib/the
 import type { ThemePref } from "./lib/theme";
 import { useFontSize } from "./lib/useFontSize";
 import { readSearchSettings } from "./lib/searchSettings";
+import { parseReferenceQuery } from "./lib/referenceSearch";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -40,6 +41,18 @@ initClassClient(
 export default function App() {
   const [query, setQuery] = useState("loving");
   const [source, setSource] = useState<Source>("NASB");
+  const referenceQuery = useMemo(() => parseReferenceQuery(query), [query]);
+  const isReferenceSearch = referenceQuery !== null;
+  const [referenceErrors, setReferenceErrors] = useState<string[]>([]);
+  const [referenceBibleOrder, setReferenceBibleOrder] = useState(() => {
+    try { return localStorage.getItem('bcv-reference-bible-order') === 'true'; }
+    catch { return false; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('bcv-reference-bible-order', String(referenceBibleOrder)); }
+    catch { /* Storage may be unavailable. */ }
+  }, [referenceBibleOrder]);
   const [searchCollapsed, setSearchCollapsed] = useState(false);
   const [showChart, setShowChart] = useState(false);
   const [selectedWord, setSelectedWord] = useState<WordToken | null>(null);
@@ -217,6 +230,7 @@ export default function App() {
         setResults(r.results);
         setTotalHits(r.totalHits);
         setHitsByBook(r.hitsByBook);
+        setReferenceErrors(r.errors ?? []);
         setActiveTestament((current) =>
           current && !r.results.some((result) => result.testament === current) ? null : current,
         );
@@ -264,7 +278,7 @@ export default function App() {
       q.length >= 2 && q.startsWith('"') && q.endsWith('"');
     const isSingleWord =
       query.trim().length > 0 && !query.includes(" ") && !isPhrase(query);
-    if (!isOrigLang || !isSingleWord || results.length === 0) {
+    if (isReferenceSearch || !isOrigLang || !isSingleWord || results.length === 0) {
       setGlossEntry(null);
       return;
     }
@@ -299,14 +313,22 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [source, query, results, searchSettings.combineGreek]);
+  }, [source, query, results, searchSettings.combineGreek, isReferenceSearch]);
 
   const hasBothTestaments = results.some((r) => r.testament === "OT") &&
     results.some((r) => r.testament === "NT");
 
+  const orderedResults = useMemo(() => {
+    if (!isReferenceSearch || !referenceBibleOrder) return results;
+    return [...results].sort((a, b) =>
+      (BOOK_BY_ABBR3.get(a.bookAbbr)?.id ?? 0) - (BOOK_BY_ABBR3.get(b.bookAbbr)?.id ?? 0) ||
+      a.chapter - b.chapter || a.verse - b.verse,
+    );
+  }, [results, isReferenceSearch, referenceBibleOrder]);
+
   const testamentResults = useMemo(
-    () => activeTestament ? results.filter((r) => r.testament === activeTestament) : results,
-    [results, activeTestament],
+    () => activeTestament ? orderedResults.filter((r) => r.testament === activeTestament) : orderedResults,
+    [orderedResults, activeTestament],
   );
 
   const filtered = useMemo(
@@ -329,9 +351,10 @@ export default function App() {
   const showTestamentTotal = activeBook === null && activeTestament !== null;
   const filteredTotalHits = activeBook ? hitsByBook[activeBook] ?? 0 :
     totalHits;
-  const hitSummary = showBookBreakdown ?
-    `${filtered.length} of ${testamentHitTotals.OT}/${testamentHitTotals.NT}/${totalHits} hits` :
-    `${filtered.length}${searchSettings.maxHits !== null || showTestamentTotal ? ` of ${filteredTotalHits}` : ""} hits`;
+  const hitSummary = isReferenceSearch ?
+    `${filtered.length}${activeBook || activeTestament ? ` of ${totalHits}` : ''} ${filtered.length === 1 ? 'verse' : 'verses'}` : showBookBreakdown ?
+      `${filtered.length} of ${testamentHitTotals.OT}/${testamentHitTotals.NT}/${totalHits} hits` :
+      `${filtered.length}${searchSettings.maxHits !== null || showTestamentTotal ? ` of ${filteredTotalHits}` : ""} hits`;
 
   const books = useMemo<BookNavItem[]>(() => {
     const seen = new Set<string>();
@@ -350,6 +373,7 @@ export default function App() {
   const distribution = useMemo(() => computeDistribution(testamentResults), [testamentResults]);
 
   const onGo = (q: string, s: Source) => {
+    if (parseReferenceQuery(q)) s = 'NASB';
     location.hash = "";
     setMode("search");
     setQuery(q);
@@ -357,6 +381,7 @@ export default function App() {
     setActiveBook(null);
     setActiveTestament(null);
     setEnglishStrongsWord(null);
+    setReferenceErrors([]);
     // Record in history — deduplicate (remove prior occurrence of same query+source),
     // prepend, and cap at 30 entries.
     setSearchHistory((prev) => {
@@ -576,7 +601,7 @@ export default function App() {
                 {query || "—"}
               </span>
               <span
-                title={showBookBreakdown ? 'Returned hits in selected book of OT / NT / total hits' : undefined}
+                title={!isReferenceSearch && showBookBreakdown ? 'Returned hits in selected book of OT / NT / total hits' : undefined}
                 style={{
                   fontSize: "var(--fs-body)",
                   color: "var(--ink-light)",
@@ -585,7 +610,7 @@ export default function App() {
               >
                 {isLoading
                   ? dbMessage || "Loading…"
-                  : `${hitSummary} · ${searchSettings.combineGreek && (source === "LXX" || source === "GNT") ? "LXX + GNT" : source}`}
+                  : `${hitSummary} · ${isReferenceSearch ? 'NASB' : searchSettings.combineGreek && (source === "LXX" || source === "GNT") ? "LXX + GNT" : source}`}
               </span>
               {!isLoading && ENG_SOURCES.has(source) && /^[a-z]+(?:['’-][a-z]+)*$/i.test(query.trim()) && (
                 <button
@@ -596,6 +621,21 @@ export default function App() {
                 </button>
               )}
             </div>
+
+            {isReferenceSearch && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, color: 'var(--ink)', fontSize: 'var(--fs-control)', fontFamily: 'DM Sans' }}>
+                <input type="checkbox" checked={referenceBibleOrder} onChange={(e) => setReferenceBibleOrder(e.target.checked)} />
+                Bible order
+              </label>
+            )}
+            {isReferenceSearch && referenceErrors.length > 0 && (
+              <div role="alert" style={{ padding: 12, marginBottom: 10, border: '1px solid var(--amber)', borderRadius: 8, background: 'var(--amber-bg)', color: 'var(--ink)', fontSize: 'var(--fs-body)' }}>
+                <div style={{ fontWeight: 600 }}>Some references could not be displayed:</div>
+                <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+                  {referenceErrors.map((error, index) => <li key={index}>{error}</li>)}
+                </ul>
+              </div>
+            )}
 
             {isLoading ? (
               <div
@@ -679,7 +719,7 @@ export default function App() {
                           setSelectedLang(lang);
                         }}
                         onEngWordClick={(word) =>
-                          onGo(word, ENG_SOURCES.has(source) ? source : "NASB")
+                          onGo(word, isReferenceSearch ? 'NASB' : ENG_SOURCES.has(source) ? source : "NASB")
                         }
                         onRefClick={(r) =>
                           setChapterView({

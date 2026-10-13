@@ -6,6 +6,7 @@ A fast, offline-capable Bible search tool with interlinear Hebrew and Greek, bui
 
 - **Full-text search** across six translations — KJV, ASV, LEB, NASB, Hebrew MT (WLC), LXX, and GNT
 - **Phrase search** — wrap terms in double quotes: `"holy spirit"`, `"in the beginning"`
+- **Reference search** — enter verses, chapters, or ranges such as `John 3:16,18; Rom 8:28`, `Psalm 23`, `John 3-4`, or `John 3:16–4:6`. For single-chapter books, `Jude 3` means Jude 1:3. References display NASB with the available interlinear text, ignore the search hit limit, and preserve input order while removing duplicate verses. The Bible order toggle sorts references into canonical order and defaults to off. Invalid references are reported alongside valid results; bare book names remain word searches.
 - **Interlinear display** — every result card shows the underlying Hebrew (WLC) and/or Greek (LXX / GNT) text alongside the English translation
 - **Dual OT interlinear** — OT verses show both the Masoretic (WLC) and Septuagint (LXX) in parallel
 - **Word lookup** — tap any Hebrew or Greek word chip to see its lemma, transliteration, Strong's number, gloss, and full lexical definition
