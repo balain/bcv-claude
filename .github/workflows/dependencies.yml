@@ -1,0 +1,36 @@
+name: Dependency validation
+on:
+  pull_request:
+  push:
+    branches: [dev]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        manager: [npm, pnpm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        if: matrix.manager == 'pnpm'
+        with:
+          version: 10.32.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: ${{ matrix.manager }}
+      - name: Install npm lockfile
+        if: matrix.manager == 'npm'
+        run: npm ci
+      - name: Install pnpm lockfile
+        if: matrix.manager == 'pnpm'
+        run: pnpm install --frozen-lockfile
+      - name: Audit dependencies
+        run: ${{ matrix.manager }} audit --audit-level=moderate
+      - name: Build application and service worker
+        run: ${{ matrix.manager }} run build
+      - name: Report existing lint issues
+        continue-on-error: true
+        run: ${{ matrix.manager }} run lint

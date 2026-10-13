@@ -33,11 +33,21 @@
     "workbox-routing": "^7.4.1"
   },
   "overrides": {
-    "brace-expansion": "^5.0.9"
+    "brace-expansion": "5.0.12",
+    "fast-uri": "3.1.8",
+    "browserslist": "4.28.7",
+    "baseline-browser-mapping": "2.11.10",
+    "nanoid": "3.3.18",
+    "source-map-js": "1.2.2"
   },
   "pnpm": {
     "overrides": {
-      "brace-expansion": "^5.0.9"
+      "brace-expansion": "5.0.12",
+      "fast-uri": "3.1.8",
+      "browserslist": "4.28.7",
+      "baseline-browser-mapping": "2.11.10",
+      "nanoid": "3.3.18",
+      "source-map-js": "1.2.2"
     }
   }
 }
