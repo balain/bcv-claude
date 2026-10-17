@@ -25,6 +25,7 @@ export interface StudyRequest {
     target?: StudyTarget;
     filters: StudyFilters;
     page: number;
+    equivalentPage?: number;
 }
 export interface Frequency {
     corpus: string;
@@ -53,6 +54,7 @@ export interface StudyPassage {
 export interface WordStudyData {
     candidates: StudyTarget[];
     correspondences: StudyTarget[];
+    equivalents: EquivalentReport;
     target: StudyTarget | null;
     entries: LexEntry[];
     studies: StudyEntry[];
@@ -79,4 +81,17 @@ export interface WordStudyData {
     }[];
     warnings: string[];
     relationsAvailable: boolean;
+}
+
+export interface EquivalentReport {
+    available: boolean;
+    applicable: boolean;
+    revision: string;
+    sourceRecords: number;
+    hebrewValidated: number;
+    greekProvided: number;
+    greekChecked: number;
+    globalExcluded: number;
+    groups: { strong: string; surface: string; records: number; checked: number }[];
+    evidence: { morphId: string; bookId: number; book: string; abbr: string; chapter: number; verse: number; hebrew: string; hebrewStrong: string; greek: string; greekStrong: string; hebrewStatus: string; greekStatus: string }[];
 }

@@ -1,3 +1,4 @@
+import { EquivalentPanel } from './EquivalentPanel';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { dbClient } from '../../lib/db';
 import type { DBStatus } from '../../lib/db';
@@ -12,6 +13,7 @@ import { RelationshipControls } from './RelationshipControls';
 import '../../styles/wordStudy.css';
 const subscribe = (fn: () => void) => { addEventListener('hashchange', fn); return () => removeEventListener('hashchange', fn); };
 const snapshot = () => location.hash;
+const routeInteger = (value:string|null) => { const n=Number(value); return Number.isSafeInteger(n)&&n>=0?n:0; };
 function download(name: string, text: string, type: string) {
     const url = URL.createObjectURL(new Blob([text], { type }));
     const a = document.createElement('a');
@@ -35,7 +37,7 @@ export function WordStudyMode({ status, onOpenPassage }: {
         return { query: p.get('q') ?? '', translation, language: p.get('language') ?? 'auto',
             target: target ? { id: target } as StudyTarget : undefined,
             filters: { corpus: p.get('corpus') ?? '', book: Math.max(0, Number(p.get('book')) || 0), form: p.get('form') ?? '' },
-            page: Math.max(0, Math.floor(Number(p.get('page')) || 0)) };
+            equivalentPage: routeInteger(p.get('equivalentPage')), page: routeInteger(p.get('page')) };
     }, [requestKey]);
     const params = new URLSearchParams(hash.split('?')[1] ?? '');
     const savedParam = params.get('saved');
@@ -85,20 +87,20 @@ export function WordStudyMode({ status, onOpenPassage }: {
     const update = (changes: Record<string, string | null>, resetPage = true) => {
         const p = new URLSearchParams(location.hash.split('?')[1] ?? '');
         if (resetPage)
-            p.delete('page');
+            { p.delete('page'); p.delete('equivalentPage'); }
         for (const [key, value] of Object.entries(changes)) {
             if (value === null || value === '')
                 p.delete(key);
             else
                 p.set(key, value);
         }
-        location.hash = `/study?${p}`;
+        location.assign(`#/study?${p}`);
     };
     // A blank hidden parameter explicitly represents all visible, independently of global defaults.
     const applyVisibility = (v: Visibility) => {
         const p = new URLSearchParams(location.hash.split('?')[1] ?? '');
         p.set('hidden', Object.entries(v).filter(([, visible]) => !visible).map(([key]) => key).join(','));
-        location.hash = `/study?${p}`;
+        location.assign(`#/study?${p}`);
     };
     useEffect(() => {
         let cancelled = false;
@@ -165,10 +167,10 @@ export function WordStudyMode({ status, onOpenPassage }: {
         setTitle(s.title);
         setNotes(s.notes);
         setSessionId(s.sessionId);
-        const p = new URLSearchParams({ q: s.request.query, translation: s.request.translation, language: s.request.language, view: s.view ?? 'overview', page: String(s.request.page), saved: s.id, corpus: s.request.filters.corpus, book: String(s.request.filters.book), form: s.request.filters.form, hidden: Object.entries(s.visibility).filter(([, v]) => !v).map(([k]) => k).join(',') });
+        const p = new URLSearchParams({ q: s.request.query, translation: s.request.translation, language: s.request.language, view: s.view ?? 'overview', page: String(s.request.page), equivalentPage:String(s.request.equivalentPage??0), saved: s.id, corpus: s.request.filters.corpus, book: String(s.request.filters.book), form: s.request.filters.form, hidden: Object.entries(s.visibility).filter(([, v]) => !v).map(([k]) => k).join(',') });
         if (s.request.target)
             p.set('target', s.request.target.id);
-        location.hash = `/study?${p}`;
+        location.assign(`#/study?${p}`);
     };
     const activeData = !loading ? data : null;
     const relations = activeData?.relations.filter(r => visibility[r.kind]) ?? [];
@@ -208,7 +210,7 @@ export function WordStudyMode({ status, onOpenPassage }: {
     {activeData && candidates.length > 0 && <details className="ws-panel" open={!target || target.lang === 'Eng'}><summary>{target?.lang === 'Eng' ? 'Lexical discovery — English gloss matches' : 'Other matching entries'} ({candidates.length})</summary><p>These candidates are lexical matches, not verified translation equivalents.</p><div className="ws-candidates">{candidates.map(e => <button key={e.id} onClick={() => select(e)}><strong dir="auto">{e.lemma}</strong><span>{e.translit} · {e.displayStrong || e.strong}</span><span>{e.gloss}</span><small>{e.language} · {e.reason}</small></button>)}</div></details>}
     {activeData && target && <>
       <section className="ws-panel ws-identity"><div><p className="ws-eyebrow">{target.language}</p><h2 dir="auto">{target.lemma}</h2><p>{target.translit} {target.strong && `· ${target.strong}`}</p><p>{target.gloss}</p></div><div className="ws-view" role="group" aria-label="Study view"><button aria-pressed={!map} onClick={() => update({ view: null }, false)}>Overview</button><button aria-pressed={map} onClick={() => update({ view: 'map' }, false)}>Word map</button></div></section>
-      <nav className="ws-section-nav" aria-label="Study sections">{['usage', 'entries', 'relations', 'forms', 'passages', 'workspace', 'sources'].map(s => <button key={s} onClick={() => document.getElementById(`ws-${s}`)?.scrollIntoView({ block: 'start' })}>{s[0].toUpperCase() + s.slice(1)}</button>)}</nav>
+      <nav className="ws-section-nav" aria-label="Study sections">{['usage', 'entries', 'relations', 'forms', 'equivalents', 'passages', 'workspace', 'sources'].map(s => <button key={s} onClick={() => document.getElementById(`ws-${s}`)?.scrollIntoView({ block: 'start' })}>{s[0].toUpperCase() + s.slice(1)}</button>)}</nav>
       <section className="ws-panel" id="ws-usage"><h2>Usage and frequency</h2><div className="ws-filters">
         {target.lang !== 'Eng' && <label>Corpus<select value={request.filters.corpus} onChange={e => update({ corpus: e.target.value, form: null, book: null })}><option value="">All available corpora</option>{(target.lang === 'Heb' ? ['WLC'] : ['LXX', 'GNT']).map(c => <option key={c}>{c}</option>)}</select></label>}
         <label>Book<select value={request.filters.book} onChange={e => update({ book: e.target.value })}><option value={0}>All books</option>{activeData.books.map(b => <option value={b.id} key={b.id}>{b.name}</option>)}</select></label>
@@ -223,10 +225,10 @@ export function WordStudyMode({ status, onOpenPassage }: {
         <section className="ws-panel" id="ws-entries"><h2>Meanings and entries</h2>{map ? <details><summary>Entries ({activeData.entries.length + activeData.studies.length})</summary>{entries}</details> : entries}</section>
         <section className="ws-panel" id="ws-relations"><h2>Related words</h2>{map ? <details open><summary>Relationship branches</summary>{relationContent}</details> : relationContent}</section>
         <section className="ws-panel" id="ws-forms"><h2>Forms and grammar</h2>{map ? <details><summary>Forms ({activeData.forms.length})</summary>{forms}</details> : forms}</section>
-        <section className="ws-panel"><h2>Corresponding words</h2><p>Translation-specific and Hebrew/Aramaic–Greek word alignments are not installed. Explore the lexical entries and passage context; words in corresponding verses are not automatically translation equivalents.</p>{activeData.correspondences.length > 0 && <details><summary>Other-language lexical discovery ({activeData.correspondences.length})</summary><p>These entries share an English gloss. This is not evidence of synonymy or translation equivalence.</p><div className="ws-candidates">{activeData.correspondences.map(e => <button key={e.id} onClick={() => { update({ q: e.strong, target: e.id, language: e.lang, corpus: null, book: null, form: null, hidden: null, saved: null }); }}><strong dir="auto">{e.lemma}</strong><span>{e.language} · {e.displayStrong || e.strong}</span><small>{e.gloss} · STEP brief lexicon</small></button>)}</div></details>}{activeData.studies.flatMap(e => e.senses.flatMap(s => s.glosses)).length > 0 && <p>Source glosses: {[...new Set(activeData.studies.flatMap(e => e.senses.flatMap(s => s.glosses)))].join(', ')}</p>}</section>
+        <section className="ws-panel" id="ws-equivalents"><h2>Hebrew–LXX equivalents</h2><EquivalentPanel report={activeData.equivalents} target={target} request={request} onStudy={studyWord} onPage={page=>update({equivalentPage:String(page)},false)} onPassage={onOpenPassage} />{activeData.correspondences.length > 0 && <details><summary>Other-language lexical discovery ({activeData.correspondences.length})</summary><p>These entries share an English gloss. This is not evidence of synonymy or translation equivalence.</p><div className="ws-candidates">{activeData.correspondences.map(e => <button key={e.id} onClick={() => { update({ q: e.strong, target: e.id, language: e.lang, corpus: null, book: null, form: null, hidden: null, saved: null }); }}><strong dir="auto">{e.lemma}</strong><span>{e.language} · {e.displayStrong || e.strong}</span><small>{e.gloss} · STEP brief lexicon</small></button>)}</div></details>}{activeData.studies.flatMap(e => e.senses.flatMap(s => s.glosses)).length > 0 && <p>Source glosses: {[...new Set(activeData.studies.flatMap(e => e.senses.flatMap(s => s.glosses)))].join(', ')}</p>}</section>
       </div>
       <section className="ws-panel" id="ws-passages"><h2>Passages <small>({activeData.totalVerses.toLocaleString()} corpus–verse records)</small></h2><p>{request.translation} · {request.filters.corpus || 'All selected corpora'} · {request.filters.book ? 'Selected book' : 'All books'}</p>{!activeData.passages.length && <p>No occurrences in this selection. Try clearing filters.</p>}{activeData.passages.map(p => <article className="ws-passage" key={`${p.corpus}:${p.bookId}:${p.chapter}:${p.verse}`}><button onClick={() => onOpenPassage(p)}>{p.book} {p.chapter}:{p.verse} →</button><small>{p.corpus}</small><p>{p.text || `Text unavailable in ${request.translation}.`}</p><p dir="auto" className="ws-matched">{p.words}</p></article>)}<div className="ws-pagination"><button disabled={request.page === 0} onClick={() => update({ page: String(request.page - 1) }, false)}>Previous</button><span>Page {request.page + 1} of {Math.max(1, Math.ceil(activeData.totalVerses / 40))}</span><button disabled={(request.page + 1) * 40 >= activeData.totalVerses} onClick={() => update({ page: String(request.page + 1) }, false)}>Next</button></div></section>
-      <section className="ws-panel" id="ws-workspace"><h2>Study workspace</h2><label>Study title<input value={title} onChange={e => setTitle(e.target.value)} placeholder={target.lemma}/></label><label>Notes<textarea rows={4} value={notes} onChange={e => setNotes(e.target.value)}/></label><label>Attach to Class session<select value={sessionId ?? ''} onChange={e => setSessionId(e.target.value ? Number(e.target.value) : null)}><option value="">No session</option>{sessions.map(s => <option value={s.id} key={s.id}>{s.title} · {s.taughtOn}</option>)}</select></label><div className="ws-actions"><button onClick={save}>Save study</button><button onClick={() => download('word-study.json', JSON.stringify({ kind: 'bcv.word-studies/v1', studies: [currentStudy()] }, null, 2), 'application/json')}>Export study JSON</button><button onClick={() => download('word-study.md', `# ${title || target.lemma}\n\n${notes}\n\nTranslation: ${request.translation}\n\n${activeData.frequencies.map(f => `${f.corpus}: ${f.count} occurrences, ${f.verses} verses; denominator ${f.denominator} tokens.`).join('\n\n')}\n\n## Entries\n\n${activeData.studies.map(e => `${e.source}: ${e.lemma}\n\n${e.senses.map(s => s.definition).join('\n\n')}`).join('\n\n')}\n\n## Coverage\n\n${activeData.warnings.join('\n\n')}\n\n## Sources\n\n${activeData.sources.map(s => `${s.attribution} ${s.license}; revision ${s.revision}; ${s.url}`).join('\n\n')}`, 'text/markdown')}>Export readable study</button><button onClick={() => setPins(p => [...p, ...activeData.frequencies.map(f => ({ target: target.lemma, scope: `${f.corpus} · ${request.filters.book || 'all books'} · ${request.filters.form || 'all forms'}`, count: f.count, rate: f.denominator ? (f.count / f.denominator * 1000).toFixed(3) : 'Unavailable' }))])}>Add to comparison</button></div></section>
+      <section className="ws-panel" id="ws-workspace"><h2>Study workspace</h2><label>Study title<input value={title} onChange={e => setTitle(e.target.value)} placeholder={target.lemma}/></label><label>Notes<textarea rows={4} value={notes} onChange={e => setNotes(e.target.value)}/></label><label>Attach to Class session<select value={sessionId ?? ''} onChange={e => setSessionId(e.target.value ? Number(e.target.value) : null)}><option value="">No session</option>{sessions.map(s => <option value={s.id} key={s.id}>{s.title} · {s.taughtOn}</option>)}</select></label><div className="ws-actions"><button onClick={save}>Save study</button><button onClick={() => download('word-study.json', JSON.stringify({ kind: 'bcv.word-studies/v1', studies: [currentStudy()] }, null, 2), 'application/json')}>Export study JSON</button><button onClick={() => download('word-study.md', `# ${title || target.lemma}\n\n${notes}\n\nTranslation: ${request.translation}\n\n${activeData.frequencies.map(f => `${f.corpus}: ${f.count} occurrences, ${f.verses} verses; denominator ${f.denominator} tokens.`).join('\n\n')}\n\n## Entries\n\n${activeData.studies.map(e => `${e.source}: ${e.lemma}\n\n${e.senses.map(s => s.definition).join('\n\n')}`).join('\n\n')}\n\n## Hebrew–LXX equivalents\n\n${activeData.equivalents.groups.map(g=>`${g.strong || g.surface}: ${g.records} source records; ${g.checked} Greek checks at stored reference.`).join('\n\n')}\n\nMACULA recorded equivalents are source annotations; Greek surface/identifier checks do not establish cross-edition verse alignment.\n\n## Coverage\n\n${activeData.warnings.join('\n\n')}\n\n## Sources\n\n${activeData.sources.map(s => `${s.attribution} ${s.license}; revision ${s.revision}; ${s.url}`).join('\n\n')}`, 'text/markdown')}>Export readable study</button><button onClick={() => setPins(p => [...p, ...activeData.frequencies.map(f => ({ target: target.lemma, scope: `${f.corpus} · ${request.filters.book || 'all books'} · ${request.filters.form || 'all forms'}`, count: f.count, rate: f.denominator ? (f.count / f.denominator * 1000).toFixed(3) : 'Unavailable' }))])}>Add to comparison</button></div></section>
     </>}
     <section className="ws-panel"><h2>Saved studies</h2><p>Stored in the local Class database. Export a backup to transfer to another device.</p>{saved.map(s => <div className="ws-saved" key={s.id}><button onClick={() => restore(s)}>{s.title}</button>{s.sessionId && <a href={`#/class/${s.sessionId}`}>Class session →</a>}<button aria-label={`Delete saved study ${s.title}`} onClick={async () => { try {
         await getClassClient().wordStudies.delete(s.id);

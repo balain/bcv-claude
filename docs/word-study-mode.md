@@ -308,3 +308,7 @@ Local validation includes fixture-based SQLite query tests, independent counts f
 ### Relationship discovery correction — 2026-10-17
 
 English studies now load sourced relationships for their original-language gloss candidates instead of returning an empty relationship panel. Each relationship identifies its originating lemma, identifier, language and source; these are not asserted to be relationships of the English word or aligned translations. Duplicate display aliases are deduplicated for relationship discovery. Selecting a related word retains its original language and resolves ambiguous lemmas explicitly.
+
+### MACULA integration — 2026-10-17
+
+Implemented a pinned, checksum-verified import of MACULA's CC BY 4.0 Hebrew–LXX equivalents, separate Hebrew and Greek corroboration states, grouped forward/reverse lookup, source coverage, and paginated evidence. Both responsive views expose the same records. No source record is promoted to an exact cross-edition alignment solely by matching a verse number. See [integration details](macula-integration.md) and [Muraoka/LEH licensing requests](lxx-licensing.md). Commercial lexicon inquiries remain unsent drafts; no rights or licensed data have been obtained.

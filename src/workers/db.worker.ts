@@ -48,7 +48,7 @@ function post(msg: object) { self.postMessage(msg); }
 // ─── DB loading ───────────────────────────────────────────────────────────────
 
 // A new cache key prevents earlier Hebrew definitions from surviving this upgrade.
-const DB_NAME = 'bcv-word-study-v1.db';
+const DB_NAME = 'bcv-word-study-macula-v1.db';
 const DB_URL = import.meta.env.BASE_URL + 'db/bcv.db';
 
 /** Minimum plausible DB size — rejects obviously corrupt/empty OPFS entries. */

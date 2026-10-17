@@ -19,6 +19,7 @@ export function validateSavedStudy(value: unknown): asserts value is SavedWordSt
         !s.request.filters || typeof s.request.filters.corpus !== 'string' || !Number.isSafeInteger(s.request.filters.book) ||
         typeof s.request.filters.form !== 'string' || !Number.isSafeInteger(s.request.page) || s.request.page < 0 ||
         !s.visibility || !['root', 'derivation', 'synonym', 'antonym', 'related'].every(k => typeof s.visibility[k as keyof Visibility] === 'boolean') ||
+        (s.request.equivalentPage !== undefined && (!Number.isSafeInteger(s.request.equivalentPage) || s.request.equivalentPage < 0)) ||
         typeof s.updatedAt !== 'string' || !Number.isFinite(Date.parse(s.updatedAt)) ||
         (s.sessionId !== null && (!Number.isSafeInteger(s.sessionId) || s.sessionId < 1)))
         throw new Error('Invalid saved word study.');

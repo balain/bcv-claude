@@ -81,3 +81,29 @@ test('English relationship discovery does not duplicate display aliases',()=>{
  INSERT INTO lex_brief VALUES('G0026','G0026a',null,'Grk','ἀγάπη','love','agapē','','');`);
  assert.equal(engine.run(req('love')).relations.length,1);db.close();
 });
+function seedEquivalents(db){
+ db.exec(`CREATE TABLE macula_equivalents(morph_id,book_id,chapter,verse,word_num,hebrew_surface,hebrew_strong,greek_surface,greek_strong,greek_key,hebrew_token_id,lxx_token_id,hebrew_status,greek_status);
+ CREATE TABLE macula_metadata(key,value);INSERT INTO macula_metadata VALUES('revision','pinned-test'),('counts','{"excluded_private_or_nonlexical_ids":4}');
+ INSERT INTO lex_brief VALUES('H0001','H0001',null,'Heb','אָב','father','av','','');
+ INSERT INTO tokens VALUES(100,'WLC',1,1,1,'אָב','אב','H0001','N');
+ INSERT INTO macula_equivalents VALUES('one',1,1,1,1,'אָב','H0001','ἀγάπη','G0026','αγαπη',100,4,'validated','surface_and_identifier'),('two',1,1,2,1,'אָב','H0001','ἀγάπη','G0026','αγαπη',null,null,'unmatched','unresolved'),('three',1,1,3,1,'אָב','H0001','',null,'',null,null,'unmatched','not_provided');`);
+}
+test('MACULA forward and reverse queries preserve coverage, missingness and source evidence',()=>{
+ const {db,engine}=fixture();seedEquivalents(db);
+ const heb=engine.run(req('H1'));assert.equal(heb.equivalents.sourceRecords,3);assert.equal(heb.equivalents.greekProvided,2);assert.equal(heb.equivalents.greekChecked,1);assert.equal(heb.equivalents.hebrewValidated,1);assert.equal(heb.equivalents.groups[0].records,2);assert.equal(heb.equivalents.evidence[2].greekStatus,'not_provided');
+ const greek=engine.run(req('G26'));assert.equal(greek.equivalents.sourceRecords,2);assert.equal(greek.equivalents.groups[0].strong,'H0001');assert.equal(greek.equivalents.globalExcluded,4);
+ assert.equal(engine.run(req('G26',{filters:{corpus:'GNT',book:0,form:''}})).equivalents.applicable,false);
+ assert.equal(engine.run(req('love')).equivalents.applicable,false);db.close();
+});
+test('MACULA form/book filters and evidence pagination do not change complete counts',()=>{
+ const {db,engine}=fixture();seedEquivalents(db);
+ assert.equal(engine.run(req('H1',{filters:{corpus:'WLC',book:1,form:'אָב'}})).equivalents.sourceRecords,1);
+ assert.equal(engine.run(req('G26',{filters:{corpus:'LXX',book:43,form:''}})).equivalents.sourceRecords,0);
+ const add=db.prepare("INSERT INTO macula_equivalents VALUES(?,1,1,?,1,'אָב','H0001','ἀγάπη','G0026','αγαπη',null,null,'unmatched','unresolved')");for(let i=4;i<=60;i++)add.run('m'+i,i);
+ const page=engine.run(req('H1',{equivalentPage:1})).equivalents;assert.equal(page.sourceRecords,60);assert.equal(page.evidence.length,20);assert.equal(page.groups[0].records,59);db.close();
+});
+test('base Strong numbers resolve extended entries without pretending to distinguish their token senses',()=>{
+ const {db,engine}=fixture();db.exec("INSERT INTO lex_brief VALUES('H1254a','H1254A',null,'Heb','בָּרָא','create','bara','',''),('H1254b','H1254B',null,'Heb','בָּרָא','fatten','bara','',''); INSERT INTO tokens VALUES(300,'WLC',1,1,1,'בָּרָא','ברא','H1254','V');");
+ const choice=engine.run(req('H1254'));assert.equal(choice.candidates.length,2);assert.equal(choice.target,null);
+ const chosen=engine.run(req('H1254a'));assert.equal(chosen.target.strong,'H1254a');assert.equal(chosen.frequencies[0].count,1);assert.ok(chosen.warnings.some(w=>w.includes('extended entries')));db.close();
+});

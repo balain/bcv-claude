@@ -30,6 +30,7 @@ import zipfile
 from html.parser import HTMLParser
 from pathlib import Path
 from study_lexicons import load_study
+from macula_equivalents import load_macula
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
@@ -914,6 +915,11 @@ def build_core() -> None:
     print("  lxx tokens:     ", load_tokens_lxx(conn))
 
     conn.commit()
+    macula_path = DATA / 'macula' / 'annotations.xml'
+    if macula_path.exists():
+        print('  MACULA equivalents:', load_macula(conn, macula_path)['counts'])
+    else:
+        print('  MACULA equivalents: optional source not installed; run scripts/macula_equivalents.py --download')
     n_cr, sk_cr = load_openbible_cross_refs(conn)
     print(f"  cross_refs (OpenBible): {n_cr} loaded, {sk_cr} skipped")
     n_jp, sk_jp = load_josephilipraja_cross_refs(conn)

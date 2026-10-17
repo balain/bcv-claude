@@ -1,4 +1,4 @@
-import type { StudyRequest, StudyTarget, WordStudyData, StudyRelation } from './types.ts';
+import type { StudyRequest, StudyTarget, WordStudyData, StudyRelation, EquivalentReport } from './types.ts';
 // Small database facade keeps the query engine usable in both the WASM worker and SQLite tests.
 export type SqlValue = string | number | null;
 export interface StudyDB {
@@ -14,6 +14,7 @@ export const englishWords = (s: string): string[] => s.toLowerCase().replace(/�
 const str = (v: SqlValue) => v == null ? '' : String(v);
 const num = (v: SqlValue) => Number(v);
 const PAGE = 40;
+const baseStrong = (value:string) => strongKey(value).replace(/[a-z]+$/, '');
 export function createWordStudyEngine(db: StudyDB) {
     const has = (name: string) => db.rows("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", [name]).length > 0;
     let lexicon: StudyTarget[] | undefined;
@@ -46,7 +47,7 @@ export function createWordStudyEngine(db: StudyDB) {
             return [];
         const allowed = (e: StudyTarget) => request.language === 'auto' || request.language === e.lang || (request.language === 'Arc' && e.language.includes('Aramaic') && !e.language.includes('unspecified'));
         let hits = lexemes().filter(allowed).map(e => {
-            const rank = strong && (strongKey(e.strong) === strong || strongKey(e.displayStrong ?? '') === strong) ? 0 : e.lemma === q ? 1 : normalize(e.lemma) === key ? 2 : normalize(e.translit) === key ? 3 : 99;
+            const rank = strong && (strongKey(e.strong) === strong || strongKey(e.displayStrong ?? '') === strong || (!/[a-z]$/.test(strong) && baseStrong(e.strong) === strong)) ? 0 : e.lemma === q ? 1 : normalize(e.lemma) === key ? 2 : normalize(e.translit) === key ? 3 : 99;
             return { e, rank };
         }).filter(x => x.rank < 99);
         if (!hits.length && !strong) {
@@ -78,11 +79,35 @@ export function createWordStudyEngine(db: StudyDB) {
         return db.rows('SELECT kind,target_lemma,source,context FROM word_relations WHERE lemma_key=? AND lang=? ORDER BY kind,target_lemma', [normalize(target.lemma), target.lang])
             .map(x => ({ kind: str(x[0]) as StudyRelation['kind'], lemma: str(x[1]), source: str(x[2]), context: str(x[3]), lang: target.lang as 'Heb' | 'Grk' }));
     }
+    function equivalents(r: StudyRequest, target: StudyTarget | null): EquivalentReport {
+        const report: EquivalentReport = { available: has('macula_equivalents'), applicable: Boolean(target && target.lang !== 'Eng' && !(target.lang === 'Grk' && r.filters.corpus === 'GNT')), revision: '', sourceRecords: 0, hebrewValidated: 0, greekProvided: 0, greekChecked: 0, globalExcluded: 0, groups: [], evidence: [] };
+        if (!report.available || !report.applicable || !target) return report;
+        const meta = Object.fromEntries(db.rows('SELECT key,value FROM macula_metadata').map(row=>[str(row[0]),str(row[1])]));
+        report.revision = meta.revision || '';
+        report.globalExcluded = JSON.parse(meta.counts || '{}').excluded_private_or_nonlexical_ids || 0;
+        const key = strongKey(target.strong).replace(/[a-z]+$/, '');
+        const bind: SqlValue[] = [key];
+        let where = target.lang === 'Heb' ? 'm.hebrew_strong=?' : 'm.greek_strong=?';
+        if (r.filters.book > 0) { where += ' AND m.book_id=?'; bind.push(r.filters.book); }
+        if (r.filters.form) {
+            if (target.lang === 'Heb') { where += ' AND h.surface=?'; bind.push(r.filters.form); }
+            else { where += ' AND m.greek_key=?'; bind.push(r.filters.form.normalize('NFD').replace(/[^\p{L}]/gu,'').toLowerCase().replace(/ς/g,'σ')); }
+        }
+        const from = `FROM macula_equivalents m LEFT JOIN tokens h ON h.id=m.hebrew_token_id WHERE ${where}`;
+        const totals = db.rows(`SELECT count(*),coalesce(sum(m.hebrew_status='validated'),0),coalesce(sum(m.greek_surface!=''),0),coalesce(sum(m.greek_status='surface_and_identifier'),0) ${from}`, bind)[0];
+        [report.sourceRecords,report.hebrewValidated,report.greekProvided,report.greekChecked] = totals.map(num);
+        const peerStrong = target.lang === 'Heb' ? 'm.greek_strong' : 'm.hebrew_strong';
+        const peerSurface = target.lang === 'Heb' ? 'm.greek_surface' : 'm.hebrew_surface';
+        report.groups = db.rows(`SELECT coalesce(${peerStrong},''),min(${peerSurface}),count(*),sum(m.greek_status='surface_and_identifier') ${from} AND m.greek_surface!='' GROUP BY ${peerStrong},CASE WHEN ${peerStrong} IS NULL THEN ${peerSurface} ELSE '' END ORDER BY count(*) DESC,${peerStrong}`, bind).map(row=>({strong:str(row[0]),surface:str(row[1]),records:num(row[2]),checked:num(row[3])}));
+        const page = Number.isSafeInteger(r.equivalentPage) && r.equivalentPage! > 0 ? r.equivalentPage! : 0;
+        report.evidence = db.rows(`SELECT m.morph_id,m.book_id,b.name,b.abbr3,m.chapter,m.verse,m.hebrew_surface,m.hebrew_strong,m.greek_surface,coalesce(m.greek_strong,''),m.hebrew_status,m.greek_status FROM macula_equivalents m JOIN book_meta b ON b.id=m.book_id LEFT JOIN tokens h ON h.id=m.hebrew_token_id WHERE ${where} ORDER BY m.book_id,m.chapter,m.verse,m.morph_id LIMIT 40 OFFSET ?`, [...bind,page*40]).map(row=>({morphId:str(row[0]),bookId:num(row[1]),book:str(row[2]),abbr:str(row[3]),chapter:num(row[4]),verse:num(row[5]),hebrew:str(row[6]),hebrewStrong:str(row[7]),greek:str(row[8]),greekStrong:str(row[9]),hebrewStatus:str(row[10]),greekStatus:str(row[11])}));
+        return report;
+    }
     function run(r: StudyRequest): WordStudyData {
         const candidates = resolve(r);
         // Never accept arbitrary identities from URLs/RPC without resolving them against the installed data.
         const target = r.target ? (lexemes().find(e => e.id === r.target?.id) ?? candidates.find(e => e.id === r.target?.id) ?? null) : candidates.length === 1 ? candidates[0] : candidates.find(e => e.lang === 'Eng') ?? null;
-        const result: WordStudyData = { candidates, correspondences: [], target, entries: [], studies: [], frequencies: [], books: [], forms: [], passages: [], totalVerses: 0, relations: [], sources: [], warnings: [], relationsAvailable: has('word_relations') };
+        const result: WordStudyData = { candidates, correspondences: [], equivalents: equivalents(r, target), target, entries: [], studies: [], frequencies: [], books: [], forms: [], passages: [], totalVerses: 0, relations: [], sources: [], warnings: [], relationsAvailable: has('word_relations') };
         if (!target) {
             if (r.target)
                 result.warnings.push('The saved lexical identity is unavailable in this dataset. Choose a current candidate.');
@@ -90,7 +115,7 @@ export function createWordStudyEngine(db: StudyDB) {
         }
         if (has('study_sources'))
             result.sources = db.rows('SELECT id,attribution,revision,license,url FROM study_sources').map(x => ({ id: str(x[0]), attribution: str(x[1]), revision: str(x[2]), license: str(x[3]), url: str(x[4]) }));
-        result.warnings.push('No translation-specific word alignments are installed. Glosses and lexical matches are discovery aids, not verified translation equivalents.');
+        result.warnings.push('English-translation word alignments are not installed. Shared glosses remain lexical discovery aids. MACULA links, when available, are recorded Hebrew–LXX equivalents with separate corpus-validation indicators.');
         if (target.lang === 'Eng')
             return english(r, result);
         const lang = target.lang;
@@ -119,7 +144,12 @@ export function createWordStudyEngine(db: StudyDB) {
         const selectedCorpus = allowedCorpus.includes(r.filters.corpus) ? [r.filters.corpus] : allowedCorpus;
         const bind: SqlValue[] = [...selectedCorpus, ...aliases];
         let where = `t.corpus IN (${selectedCorpus.map(() => '?').join(',')}) AND t.lemma IN (${aliases.map(() => '?').join(',')})`;
-        if (new Set(sameKey.map(e => strongKey(e.strong))).size > 1 || (target.id.startsWith('token:') && target.strong)) {
+        if (lang === 'Heb' && target.strong) {
+            where = `t.corpus IN (${selectedCorpus.map(() => '?').join(',')}) AND (t.strong=? OR t.strong=?)`;
+            bind.splice(0,bind.length,...selectedCorpus,baseStrong(target.strong),target.strong);
+            result.warnings.push('Hebrew counts use explicit dictionary identifier tags; extended entries may share occurrence counts.');
+        }
+        if (lang !== 'Heb' && (new Set(sameKey.map(e => strongKey(e.strong))).size > 1 || (target.id.startsWith('token:') && target.strong))) {
             where += ' AND (t.strong=? OR t.strong=?)';
             bind.push(target.strong, target.displayStrong || target.strong);
             result.warnings.push('This lemma spelling belongs to multiple lexical identities. Counts are restricted to tokens explicitly tagged with the selected identifier; untagged tokens are excluded.');
@@ -143,7 +173,7 @@ export function createWordStudyEngine(db: StudyDB) {
         result.forms = db.rows(`SELECT t.surface,t.morph,count(*) ${from} GROUP BY t.surface,t.morph ORDER BY count(*) DESC,t.surface`, bind).map(x => ({ surface: str(x[0]), morph: str(x[1]), count: num(x[2]) }));
         result.passages = db.rows(`SELECT t.book_id,b.name,b.abbr3,t.chapter,t.verse,coalesce(v.text,''),group_concat(t.surface,' · '),t.corpus FROM tokens t JOIN book_meta b ON b.id=t.book_id LEFT JOIN verses v ON v.book_id=t.book_id AND v.chapter=t.chapter AND v.verse=t.verse AND v.translation=? WHERE ${where} GROUP BY t.corpus,t.book_id,t.chapter,t.verse ORDER BY t.book_id,t.chapter,t.verse,t.corpus LIMIT ? OFFSET ?`, [r.translation, ...bind, PAGE, Math.max(0, r.page) * PAGE]).map(x => ({ bookId: num(x[0]), book: str(x[1]), abbr: str(x[2]), chapter: num(x[3]), verse: num(x[4]), text: str(x[5]), words: str(x[6]), corpus: str(x[7]) }));
         result.relations = relationships(target);
-        result.warnings.push('Counts use stored lemma annotations, not every token sharing a Strong’s number. Source annotations and mapping coverage can differ. Morphology is shown in its source notation.');
+        result.warnings.push('Greek counts use stored lemma annotations; Hebrew counts use explicit dictionary tags. Source annotations and mapping coverage can differ. Morphology is shown in its source notation.');
         return result;
     }
     function english(r: StudyRequest, result: WordStudyData) {

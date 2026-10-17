@@ -267,8 +267,8 @@ python3 scripts/word_study_data.py --database data/bcv.db
 Refresh the Bible database in the app after updating its data. Class notes and
 saved studies use the separate user database and are preserved. No new sources
 are downloaded by this command. BDB root-section links retain their editorial
-provenance; shared glosses are labeled as lexical discovery. Verified
-translation-specific word alignments are not included in the installed datasets.
+provenance; shared glosses are labeled as lexical discovery. English-translation word alignments are not included. Optional MACULA
+Hebrew–LXX equivalents provide a separately labeled source-evidence layer.
 
 The Class database upgrades automatically to schema 4. Missing Word Study tables
 are created without resetting existing sessions or notes. Do not clear browser
@@ -284,3 +284,23 @@ Word Study query and persistence regression tests (Node 24 with `node:sqlite`):
 node --test tests/wordStudy.test.mjs tests/wordStudyStorage.test.mjs
 npm run test:study
 ```
+
+### Hebrew–LXX equivalents
+
+Word Study can show MACULA's recorded Hebrew–Septuagint equivalents, with
+forward/reverse lookup, coverage, and passage evidence. Install its optional
+CC BY 4.0 dataset explicitly:
+
+```bash
+python3 scripts/macula_equivalents.py --download
+python3 scripts/macula_equivalents.py --database data/bcv.db
+```
+
+Deploy the updated Bible database together with the frontend. Private grammatical
+IDs are excluded; unresolved source records remain visible. Greek surface/ID
+checks at stored references are distinguished from verified cross-edition
+versification alignment.
+
+See [MACULA integration and validation](docs/macula-integration.md) and
+[the Muraoka/LEH licensing plan and draft inquiries](docs/lxx-licensing.md).
+The commercial lexicons have not been imported or licensed; inquiries are drafts.
