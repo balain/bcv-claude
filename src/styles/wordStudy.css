@@ -342,3 +342,12 @@
 #ws-equivalents .ws-table-wrap table { min-width: 500px; }
 #ws-equivalents td[dir=auto] { white-space: nowrap; }
 @media (max-width: 760px) { .ws-equivalent-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Native disclosures support touch, pointer, and keyboard navigation. */
+.word-study .ws-card > summary { min-height: 44px; padding: 4px 0; }
+.word-study .ws-card > summary h2 { display: inline; margin: 0; vertical-align: middle; }
+.ws-card[open] > .ws-card-content { margin-top: 16px; }
+.ws-card.ws-identity { display: block; }
+.ws-card.ws-identity > .ws-card-content { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+
+.word-study .ws-entry > summary h3 { display: inline; margin: 0; }
