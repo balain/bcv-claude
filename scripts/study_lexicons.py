@@ -200,7 +200,7 @@ def load_study(conn: sqlite3.Connection, books: list[tuple], sources: Path = SOU
                         "references": json.loads(structured).get("citations", []), "note": "", "code": e}])
         temp.close()
         counts["lsj"] = conn.execute("SELECT count(*) FROM study_entries WHERE source='lsj'").fetchone()[0]
-    changes = "Converted XML/JSON or STEP TSV to SQLite; normalized lookup keys; rendered definitions as plain text. UBS style markers removed, internal links rendered as readable labels, footnotes retained, word offsets omitted from displayed references; semantic senses retained."
+    changes = "Converted XML/JSON or STEP TSV to SQLite; normalized lookup keys; rendered definitions as plain text. UBS style markers removed, internal links rendered as readable labels, footnotes retained, word offsets omitted from displayed references; semantic senses retained. Explicit UBS semantic relations and original Strong/language aliases retained; BDB root-section organization indexed with editorial provenance."
     metadata = [
         ("bdb", BDB_REV, "Open Scriptures Hebrew Bible Project. Brown, Driver, Briggs text is public domain.", "CC BY 4.0", "https://github.com/openscriptures/HebrewLexicon", changes),
         ("lsj", "local STEP TFLSJ files", "Data created by STEP Bible based on work at Tyndale House Cambridge.", "CC BY 4.0", "https://github.com/STEPBible/STEPBible-Data", changes),
@@ -208,6 +208,8 @@ def load_study(conn: sqlite3.Connection, books: list[tuple], sources: Path = SOU
         ("ubs-hebrew", UBS_REV, "UBS Dictionary of Biblical Hebrew © United Bible Societies 2023. Adapted from Semantic Dictionary of Biblical Hebrew © 2000–2023 United Bible Societies.", "CC BY-SA 4.0", "https://github.com/ubsicap/ubs-open-license", changes),
     ]
     conn.executemany("INSERT OR REPLACE INTO study_sources VALUES(?,?,?,?,?,?)", metadata)
+    from word_study_data import load_word_study
+    counts["word-relations"] = load_word_study(conn, sources)
     return counts
 
 

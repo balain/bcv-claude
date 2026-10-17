@@ -1,3 +1,4 @@
+import type { SavedWordStudy } from '../wordStudy/storage';
 // ============================================================================
 // types.ts — Class Mode TypeScript types.
 //
@@ -190,6 +191,9 @@ export interface RpcEnvelope<T extends string = string, D = unknown> {
 }
 
 export type ClassRequest =
+  | RpcEnvelope<'class_word_studies', Record<string, never>>
+  | RpcEnvelope<'class_word_save', { study: SavedWordStudy }>
+  | RpcEnvelope<'class_word_delete', { id: string }>
   // Sessions
   | RpcEnvelope<'class_session_create', { title: string; taughtOn: string; seriesId?: number; primaryText?: string; location?: string }>
   | RpcEnvelope<'class_session_list',   { status?: SessionStatus; seriesId?: number; limit?: number }>
@@ -260,6 +264,7 @@ export interface ImportReport {
 
 export interface SessionExportV1 {
   kind: 'class.session/v1';
+  wordStudies?: SavedWordStudy[];
   exportedAt: string;
   deviceId: string;
   session: Session;

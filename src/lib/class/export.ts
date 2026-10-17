@@ -58,6 +58,7 @@ export function exportSession(db: DB, sessionId: number): SessionExportV1 {
 
   return {
     kind: 'class.session/v1',
+    wordStudies: db.all<{ payload: string }>('SELECT payload FROM word_studies WHERE session_id=?', [sessionId]).map(row=>JSON.parse(row.payload)),
     exportedAt: new Date().toISOString(),
     deviceId,
     session,

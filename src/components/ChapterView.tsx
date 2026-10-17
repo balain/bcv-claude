@@ -1,3 +1,4 @@
+import { rememberEnglish } from '../lib/wordStudy/settings';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { dbClient } from '../lib/db';
 import type { ChapterVerse, ChapterVerseOriginals, CrossRef } from '../lib/db';
@@ -48,6 +49,7 @@ export function ChapterView({
   standalone, onChapterChange, onOpenInBrowse, onBookmark, isBookmarked,
   versesWithNotes, onNotesBadgeClick, onCrossRefClick, onAddCrossRef,
 }: ChapterViewProps) {
+  useEffect(() => { rememberEnglish('NASB'); }, []);
   const bookId = BOOK_BY_ABBR3.get(abbr3)?.id ?? 0;
   const [localChapter, setCurrentChapter] = useState(initialChapter);
   const [localHighlight, setCurrentHighlight] = useState(highlightVerse);

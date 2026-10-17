@@ -1,3 +1,5 @@
+import { RelationshipControls } from './wordStudy/RelationshipControls';
+import { readVisibility, saveVisibility } from '../lib/wordStudy/settings';
 import { useState } from 'react';
 import { SourceCredits } from './SourceCredits';
 import type { ThemePref } from '../lib/theme';
@@ -29,6 +31,8 @@ const FONT_SIZE_OPTIONS: { value: FontSizePref; label: string; icon: string }[] 
 ];
 
 export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSizePref, onFontSizeChange, searchSettings, onSearchSettingsChange }: Props) {
+  const [studyVisibility, setStudyVisibility] = useState(readVisibility);
+  const [studySettingError, setStudySettingError] = useState('');
   const [showCredits, setShowCredits] = useState(false);
   const close = () => { setShowCredits(false); onClose(); };
   if (!open) return null;
@@ -121,6 +125,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
         {/* Divider */}
         <div style={{ margin: '12px 20px 0', borderTop: '1px solid var(--border)' }} />
 
+        <section style={{ padding:'20px' }}><h2>Word Study defaults</h2><p>Show these details in future studies on this device.</p><RelationshipControls value={studyVisibility} onChange={value => { setStudyVisibility(value); try { saveVisibility(value); setStudySettingError(''); } catch { setStudySettingError('Browser storage is unavailable; defaults were not saved.'); } }} />{studySettingError&&<p role="alert">{studySettingError}</p>}</section>
         {/* Theme section */}
         <section style={{ padding: '16px 20px', color: 'var(--ink)', fontFamily: 'DM Sans', fontSize: 'var(--fs-body)' }}>
           <h2 style={{ fontSize: 'var(--fs-control)', margin: '0 0 16px' }}>Search</h2>
@@ -169,6 +174,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
           </p>
         </section>
 
+        <section style={{ padding:'20px' }}><h2>Word Study defaults</h2><p>Show these details in future studies on this device.</p><RelationshipControls value={studyVisibility} onChange={value => { setStudyVisibility(value); try { saveVisibility(value); setStudySettingError(''); } catch { setStudySettingError('Browser storage is unavailable; defaults were not saved.'); } }} />{studySettingError&&<p role="alert">{studySettingError}</p>}</section>
         {/* Theme section */}
         <div style={{ padding: '16px 20px 0' }}>
           <div

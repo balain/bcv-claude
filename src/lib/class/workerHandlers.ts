@@ -1,3 +1,4 @@
+import { validateSavedStudy } from '../wordStudy/storage';
 // ============================================================================
 // workerHandlers.ts — RPC dispatcher for class_* requests.
 //
@@ -113,6 +114,17 @@ export async function handleClassRequest(
     }
 
     // ---- Meta ----
+    case 'class_word_studies':
+      return db.all<{ payload: string; session_id: number | null }>('SELECT payload,session_id FROM word_studies ORDER BY updated_at DESC').map(row => ({ ...JSON.parse(row.payload), sessionId: row.session_id }));
+    case 'class_word_save': {
+      const study = msg.data.study;
+      validateSavedStudy(study);
+      db.run('INSERT INTO word_studies(id,title,payload,session_id,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,payload=excluded.payload,session_id=excluded.session_id,updated_at=excluded.updated_at', [study.id,study.title,JSON.stringify(study),study.sessionId,study.updatedAt]);
+      return { ok: true };
+    }
+    case 'class_word_delete':
+      db.run('DELETE FROM word_studies WHERE id=?', [msg.data.id]);
+      return { ok: true };
     case 'class_meta_get':
       return da.getMeta(db, msg.data.key);
 

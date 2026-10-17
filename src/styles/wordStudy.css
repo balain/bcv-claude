@@ -1,0 +1,336 @@
+.word-study {
+  flex:1;
+  min-height:0;
+  overflow-y:auto;
+  color:var(--ink);
+  font-family:'DM Sans',sans-serif;
+  font-size:var(--fs-body);
+  max-width:1200px;
+  margin:0 auto;
+  padding:24px 24px 80px;
+  box-sizing:border-box;
+  width:100%;
+  overflow-wrap:anywhere}
+  .word-study * {
+    box-sizing:border-box}
+    .word-study h1 {
+      font-family:'DM Serif Display',serif;
+      font-weight:400;
+      font-size:clamp(1.7rem,4vw,2.5rem);
+      margin:4px 0 12px}
+      .word-study h2 {
+        font-size:1.35em;
+        margin:0 0 16px}
+        .word-study h3 {
+          font-size:1.12em}
+          .word-study p {
+            line-height:1.65}
+            .word-study small,.ws-muted {
+              color:var(--ink-mid);
+              font-size:.87em}
+              .ws-eyebrow {
+                letter-spacing:.16em;
+                font-size:.78em;
+                color:var(--indigo);
+                font-weight:700;
+                margin:0}
+                .ws-header {
+                  padding:8px 0 16px}
+                  .ws-panel {
+                    background:var(--surface);
+                    border:1px solid var(--border);
+                    border-radius:14px;
+                    padding:24px;
+                    margin:18px 0;
+                    scroll-margin-top:20px;
+                    min-width:0}
+                    .word-study button,.ws-import {
+                      min-height:44px;
+                      padding:9px 14px;
+                      border-radius:8px;
+                      border:1px solid var(--border);
+                      background:var(--surface);
+                      color:var(--indigo);
+                      cursor:pointer;
+                      font:inherit;
+                      text-align:start}
+                      .word-study button:hover {
+                        background:var(--indigo-bg)}
+                        .word-study button:disabled {
+                          opacity:.5;
+                          cursor:default}
+                          .word-study button[aria-pressed=true],.word-study .ws-primary {
+                            background:var(--indigo);
+                            color:white}
+                            .word-study :focus-visible {
+                              outline:3px solid var(--amber);
+                              outline-offset:3px}
+                              .word-study label {
+                                display:flex;
+                                flex-direction:column;
+                                gap:7px;
+                                font-size:.9em;
+                                min-width:0}
+                                .word-study input:not([type=checkbox]),.word-study select,.word-study textarea {
+                                  font:inherit;
+                                  color:var(--ink);
+                                  background:var(--surface);
+                                  border:1px solid var(--border);
+                                  border-radius:8px;
+                                  padding:11px;
+                                  min-height:44px;
+                                  max-width:100%;
+                                  width:100%}
+                                  .ws-search {
+                                    display:grid;
+                                    grid-template-columns:minmax(180px,2fr) 1fr 1fr auto;
+                                    align-items:end;
+                                    gap:12px}
+                                    .ws-identity {
+                                      display:flex;
+                                      align-items:center;
+                                      justify-content:space-between;
+                                      gap:20px}
+                                      .ws-identity h2 {
+                                        font-family:serif;
+                                        font-size:2.5em;
+                                        margin:8px 0}
+                                        .ws-view {
+                                          display:flex;
+                                          gap:8px}
+                                          .ws-section-nav,.ws-actions,.ws-filters {
+                                            display:flex;
+                                            flex-wrap:wrap;
+                                            gap:10px;
+                                            align-items:center}
+                                            .ws-section-nav button {
+                                              font-size:.85em}
+                                              .ws-filters label {
+                                                min-width:140px}
+                                                .ws-table-wrap {
+                                                  overflow-x:auto;
+                                                  margin:18px 0;
+                                                  max-width:100%}
+                                                  .word-study table {
+                                                    width:100%;
+                                                    border-collapse:collapse;
+                                                    font-size:.92em}
+                                                    .word-study th,.word-study td {
+                                                      padding:12px 10px;
+                                                      text-align:start;
+                                                      border-bottom:1px solid var(--border);
+                                                      vertical-align:top}
+                                                      .word-study caption {
+                                                        text-align:start;
+                                                        color:var(--ink-mid);
+                                                        padding:10px 0}
+                                                        .ws-chart {
+                                                          display:grid;
+                                                          gap:7px;
+                                                          margin-top:16px}
+                                                          .ws-chart button {
+                                                            display:grid;
+                                                            grid-template-columns:120px 1fr 55px;
+                                                            gap:12px;
+                                                            align-items:center}
+                                                            .ws-bar {
+                                                              height:12px;
+                                                              background:var(--indigo);
+                                                              border-radius:3px;
+                                                              display:block;
+                                                              min-width:2px}
+                                                              .ws-chart b {
+                                                                text-align:end}
+                                                                .ws-entry {
+                                                                  border-top:1px solid var(--border);
+                                                                  padding:18px 0}
+                                                                  .word-study summary {
+                                                                    cursor:pointer;
+                                                                    padding:12px 0;
+                                                                    min-height:44px;
+                                                                    font-weight:600}
+                                                                    .ws-definition {
+                                                                      white-space:pre-wrap}
+                                                                      .ws-visibility {
+                                                                        border:1px solid var(--border);
+                                                                        border-radius:9px;
+                                                                        display:flex;
+                                                                        flex-wrap:wrap;
+                                                                        gap:10px 20px;
+                                                                        margin:0 0 12px;
+                                                                        padding:12px}
+                                                                        .ws-visibility label {
+                                                                          flex-direction:row;
+                                                                          align-items:center;
+                                                                          min-height:44px}
+                                                                          .ws-visibility input {
+                                                                            width:20px;
+                                                                            height:20px}
+                                                                            .ws-relation {
+                                                                              display:flex;
+                                                                              flex-direction:column;
+                                                                              align-items:flex-start;
+                                                                              gap:7px;
+                                                                              padding:12px 0;
+                                                                              border-top:1px solid var(--border)}
+                                                                              .ws-candidates {
+                                                                                display:grid;
+                                                                                grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+                                                                                gap:10px;
+                                                                                max-height:420px;
+                                                                                overflow:auto;
+                                                                                padding:8px 3px}
+                                                                                .ws-candidates button {
+                                                                                  display:flex;
+                                                                                  flex-direction:column;
+                                                                                  gap:8px}
+                                                                                  .ws-candidates strong {
+                                                                                    font:1.4em serif}
+                                                                                    .ws-map {
+                                                                                      display:grid;
+                                                                                      grid-template-columns:1fr 1fr;
+                                                                                      gap:0 24px;
+                                                                                      position:relative}
+                                                                                      .ws-map-center {
+                                                                                        grid-column:1/-1;
+                                                                                        max-width:460px;
+                                                                                        width:100%;
+                                                                                        margin:24px auto 0;
+                                                                                        padding:25px;
+                                                                                        border:2px solid var(--indigo);
+                                                                                        border-radius:18px;
+                                                                                        background:var(--indigo-bg);
+                                                                                        display:flex;
+                                                                                        flex-direction:column;
+                                                                                        align-items:center;
+                                                                                        gap:10px;
+                                                                                        text-align:center}
+                                                                                        .ws-map-center strong {
+                                                                                          font:2em serif}
+                                                                                          .ws-map>.ws-panel {
+                                                                                            border-top:4px solid var(--indigo);
+                                                                                            position:relative}
+                                                                                            .ws-map>.ws-panel:before {
+                                                                                              content:'';
+                                                                                              position:absolute;
+                                                                                              height:18px;
+                                                                                              width:2px;
+                                                                                              background:var(--indigo);
+                                                                                              top:-22px;
+                                                                                              left:50%}
+                                                                                              .ws-passage {
+                                                                                                border-top:1px solid var(--border);
+                                                                                                padding:15px 0}
+                                                                                                .ws-passage small {
+                                                                                                  margin-left:12px}
+                                                                                                  .ws-matched {
+                                                                                                    color:var(--indigo);
+                                                                                                    font-family:serif;
+                                                                                                    font-size:1.2em}
+                                                                                                    .ws-pagination {
+                                                                                                      display:flex;
+                                                                                                      align-items:center;
+                                                                                                      justify-content:space-between;
+                                                                                                      gap:12px}
+                                                                                                      .ws-saved {
+                                                                                                        display:flex;
+                                                                                                        flex-wrap:wrap;
+                                                                                                        gap:12px;
+                                                                                                        align-items:center;
+                                                                                                        margin:12px 0}
+                                                                                                        .ws-actions {
+                                                                                                          margin-top:16px}
+                                                                                                          .ws-import input {
+                                                                                                            margin-top:8px}
+                                                                                                            #ws-workspace>label {
+                                                                                                              margin:15px 0}
+                                                                                                              @media(max-width:760px) {
+                                                                                                                .word-study {
+                                                                                                                  padding:16px 12px 70px}
+                                                                                                                  .ws-search {
+                                                                                                                    grid-template-columns:1fr 1fr}
+                                                                                                                    .ws-search>label:first-child {
+                                                                                                                      grid-column:1/-1}
+                                                                                                                      .ws-search>.ws-primary {
+                                                                                                                        grid-column:1/-1;
+                                                                                                                        text-align:center}
+                                                                                                                        .ws-panel {
+                                                                                                                          padding:18px 14px}
+                                                                                                                          .ws-map {
+                                                                                                                            grid-template-columns:1fr;
+                                                                                                                            gap:0}
+                                                                                                                            .ws-identity {
+                                                                                                                              align-items:flex-start;
+                                                                                                                              flex-direction:column}
+                                                                                                                              .ws-chart button {
+                                                                                                                                grid-template-columns:85px 1fr 45px;
+                                                                                                                                gap:8px;
+                                                                                                                                padding:8px}
+                                                                                                                                .word-study th,.word-study td {
+                                                                                                                                  padding:10px 7px}
+                                                                                                                                  .ws-pagination {
+                                                                                                                                    flex-wrap:wrap}
+                                                                                                                                    .ws-section-nav {
+                                                                                                                                      gap:6px}
+                                                                                                                                      .ws-section-nav button {
+                                                                                                                                        padding:8px}
+                                                                                                                                        .ws-view {
+                                                                                                                                          width:100%}
+                                                                                                                                          .ws-view button {
+                                                                                                                                            flex:1;
+                                                                                                                                            text-align:center}
+                                                                                                                                          }
+                                                                                                                                          @media(prefers-reduced-motion:reduce) {
+                                                                                                                                            .word-study * {
+                                                                                                                                              scroll-behavior:auto;
+                                                                                                                                              animation:none;
+                                                                                                                                              transition:none}
+                                                                                                                                            }
+                                                                                                                                            .ws-map {
+                                                                                                                                              align-items:start}
+                                                                                                                                              .ws-map-center {
+                                                                                                                                                position:relative;
+                                                                                                                                                margin-bottom:20px}
+                                                                                                                                                .ws-map-center:after {
+                                                                                                                                                  content:'';
+                                                                                                                                                  position:absolute;
+                                                                                                                                                  width:2px;
+                                                                                                                                                  height:20px;
+                                                                                                                                                  background:var(--indigo);
+                                                                                                                                                  bottom:-22px;
+                                                                                                                                                  left:50%}
+                                                                                                                                                  .ws-map-connector {
+                                                                                                                                                    grid-column:1/-1;
+                                                                                                                                                    border-top:2px solid var(--indigo);
+                                                                                                                                                    width:calc(50% + 12px);
+                                                                                                                                                    justify-self:center;
+                                                                                                                                                    height:0}
+                                                                                                                                                    @media(max-width:760px) {
+                                                                                                                                                      .ws-map-connector {
+                                                                                                                                                        width:0;
+                                                                                                                                                        border:0}
+                                                                                                                                                        .ws-map-center {
+                                                                                                                                                          margin-bottom:0}
+                                                                                                                                                          .ws-map-center:after {
+                                                                                                                                                            display:none}
+                                                                                                                                                          }
+                                                                                                                                                          @media(max-width:380px) {
+                                                                                                                                                            .app-header {
+                                                                                                                                                              flex-wrap:wrap;
+                                                                                                                                                              gap:6px;
+                                                                                                                                                              flex-shrink:0}
+                                                                                                                                                              .app-header>div {
+                                                                                                                                                                width:100%;
+                                                                                                                                                                justify-content:space-between}
+                                                                                                                                                              }
+
+@media (max-width: 600px) {
+  .app-mode-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .app-mode-controls button {
+    min-height: 40px;
+    padding-inline: 6px !important;
+  }
+}

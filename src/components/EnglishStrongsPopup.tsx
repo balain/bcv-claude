@@ -1,3 +1,4 @@
+import { openWordStudy } from '../lib/wordStudy/settings';
 import { useEffect, useRef, useState } from 'react';
 import { dbClient } from '../lib/db';
 import type { LexEntry } from '../lib/db';
@@ -87,6 +88,7 @@ export function EnglishStrongsPopup({ word, combineGreek, onClose, onSearch }: P
           <h2 id="english-strongs-title" style={{ margin: 0, fontFamily: 'Playfair Display', fontSize: 'var(--fs-heading)' }}>Strong’s: {word}</h2>
           <button onClick={onClose} aria-label="Close Strong’s" style={{ padding: 8, border: 'none', borderRadius: 8, background: 'var(--surface-muted)', color: 'var(--ink)', cursor: 'pointer' }}>✕</button>
         </div>
+        <button onClick={() => { openWordStudy(word); onClose(); }} style={{ minHeight:44, padding:10 }}>Study this English word →</button>
         <p style={{ fontSize: 'var(--fs-meta)', color: 'var(--ink-mid)' }}>Hebrew and Greek definitions containing this English word. Select a term to search its lemma.</p>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 'var(--fs-control)', cursor: 'pointer' }}>
           <input type="checkbox" checked={highlightWord} onChange={(e) => setHighlightWord(e.target.checked)} />

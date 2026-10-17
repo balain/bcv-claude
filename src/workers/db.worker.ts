@@ -1,3 +1,4 @@
+import { createWordStudyEngine } from '../lib/wordStudy/engine';
 /**
  * SQLite worker: loads bcv.db and answers search/lookup queries.
  *
@@ -47,7 +48,7 @@ function post(msg: object) { self.postMessage(msg); }
 // ─── DB loading ───────────────────────────────────────────────────────────────
 
 // A new cache key prevents earlier Hebrew definitions from surviving this upgrade.
-const DB_NAME = 'bcv-study-v1.db';
+const DB_NAME = 'bcv-word-study-v1.db';
 const DB_URL = import.meta.env.BASE_URL + 'db/bcv.db';
 
 /** Minimum plausible DB size — rejects obviously corrupt/empty OPFS entries. */
@@ -703,12 +704,18 @@ function execReferenceSearch(query: string) {
 }
 
 
+let wordStudyEngine: ReturnType<typeof createWordStudyEngine> | null = null;
+
 // ─── message dispatch ─────────────────────────────────────────────────────────
 
 self.addEventListener('message', (e: MessageEvent) => {
   const msg = e.data as { id: string; type: string; [k: string]: any };
   try {
-    if (msg.type === 'search') {
+    if (msg.type === 'word_study') {
+      if (!db) throw new Error('Database is not ready');
+      wordStudyEngine ??= createWordStudyEngine({ rows: (sql, bind = []) => db.exec(sql, { bind, returnValue: 'resultRows' }) });
+      post({ id: msg.id, ok: true, data: wordStudyEngine.run(msg.request) });
+    } else if (msg.type === 'search') {
       post({ id: msg.id, ok: true, data: execSearch(msg.source as Source, msg.query, msg.combineGreek, msg.maxHits) });
     } else if (msg.type === 'search_references') {
       post({ id: msg.id, ok: true, data: execReferenceSearch(msg.query) });

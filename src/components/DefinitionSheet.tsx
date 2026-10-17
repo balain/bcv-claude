@@ -1,3 +1,4 @@
+import { openWordStudy } from '../lib/wordStudy/settings';
 import { useEffect, useRef, useState } from 'react';
 import type { Lang, Source, WordToken } from '../types';
 import { dbClient } from '../lib/db';
@@ -127,7 +128,8 @@ function DefinitionSheetContent({ word, lang, onClose, onSearch }: Props) {
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => { openWordStudy(word.strong || word.lemma || word.surface, word.corpus, word.surface); onClose(); }} style={{ minHeight:44, border:'1px solid var(--border)', borderRadius:8, padding:'8px 12px', color:accentColor, background:'var(--surface)', cursor:'pointer' }}>Study word →</button>
             <button
               onClick={() => { if (word.lemma) { onSearch(word.lemma, origSource); onClose(); } }}
               disabled={!word.lemma}

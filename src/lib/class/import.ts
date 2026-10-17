@@ -1,3 +1,4 @@
+import { validateSavedStudy } from '../wordStudy/storage';
 // ============================================================================
 // import.ts — apply a SessionExportV1 to the local DB.
 //
@@ -90,6 +91,15 @@ export function importSession(
     // 7. Lex marks
     for (const m of payload.lexMarks) {
       applyLexMark(db, m, localSessionId, refIdMap, tally, failOnConflict);
+    }
+    for (const incoming of payload.wordStudies ?? []) {
+      validateSavedStudy(incoming);
+      const study = { ...incoming, sessionId: localSessionId };
+      const local = db.get<{ updated_at: string }>('SELECT updated_at FROM word_studies WHERE id=?', [study.id]);
+      if (local && local.updated_at >= study.updatedAt) { tally.skipped++; continue; }
+      if (local && failOnConflict) throw new Error('Word study import conflict: ' + study.id);
+      db.run('INSERT INTO word_studies(id,title,payload,session_id,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,payload=excluded.payload,session_id=excluded.session_id,updated_at=excluded.updated_at', [study.id,study.title,JSON.stringify(study),study.sessionId,study.updatedAt]);
+      if (local) tally.updated++; else tally.added++;
     }
     // 8. Follow-ups (heads + dependent refs/lex rows)
     for (const fu of payload.followUps) {

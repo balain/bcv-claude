@@ -934,7 +934,11 @@ def build_core() -> None:
     for entry in ubs_entries:
         entry["senses"] = json.loads(entry["senses"])
         entry["strongs"] = [r[0] for r in conn.execute("SELECT strong FROM study_strongs WHERE entry_id=? ORDER BY strong", (entry["id"],))]
-    (DATA / "ubs-study.json").write_text(json.dumps({"license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/", "sources": ubs_sources, "entries": ubs_entries}, ensure_ascii=False), encoding="utf-8")
+    ubs_relations = [dict(zip(("lemma_key", "lang", "kind", "target_lemma", "source", "context"), row))
+                     for row in conn.execute("SELECT * FROM word_relations WHERE source LIKE 'ubs-%'")]
+    ubs_languages = [dict(zip(("strong", "original_strong", "language", "source"), row))
+                     for row in conn.execute("SELECT * FROM word_languages WHERE source LIKE 'ubs-%'")]
+    (DATA / "ubs-study.json").write_text(json.dumps({"license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/", "sources": ubs_sources, "entries": ubs_entries, "relations": ubs_relations, "languages": ubs_languages}, ensure_ascii=False), encoding="utf-8")
     conn.close()
     # VACUUM in a separate connection
     c2 = sqlite3.connect(building_db)

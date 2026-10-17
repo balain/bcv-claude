@@ -1,3 +1,4 @@
+import type { StudyRequest, WordStudyData } from './wordStudy/types';
 /**
  * Main-thread RPC client for db.worker.ts.
  * Exposes searchDB() and lookupStrong() as Promises.
@@ -97,6 +98,10 @@ class DBClient {
 
   studyLookup(strong: string | null | undefined, lemma: string | null | undefined, lang: 'Heb' | 'Grk'): Promise<StudyEntry[]> {
     return this.call({ type: 'study_lookup', strong, lemma, lang });
+  }
+
+  wordStudy(request: StudyRequest): Promise<WordStudyData> {
+    return this.call({ type: 'word_study', request });
   }
 
   searchDefinitions(word: string): Promise<LexEntry[]> {

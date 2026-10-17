@@ -1,3 +1,4 @@
+import type { SavedWordStudy } from '../../lib/wordStudy/storage';
 // ============================================================================
 // SessionView.tsx — active session UI.
 //
@@ -41,10 +42,13 @@ function formatChip(r: ScriptureRef): string {
 
 export function SessionView({ sessionId, onBack, onOpenRef, onBookmark, isBookmarked }: Props) {
   const client = getClassClient();
+  const [wordStudies, setWordStudies] = useState<SavedWordStudy[]>([]);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  useEffect(() => { client.wordStudies.list().then(rows=>setWordStudies(rows.filter(s=>s.sessionId===sessionId))).catch(e=>setErr(String(e))); }, [client,sessionId]);
+
 
   const reload = useCallback(async () => {
     try {
@@ -132,6 +136,7 @@ export function SessionView({ sessionId, onBack, onOpenRef, onBookmark, isBookma
         </div>
       )}
 
+      <section className="class-refs-section"><h2>Word studies</h2>{wordStudies.map(s=><article key={s.id}><a href={`#/study?${new URLSearchParams({q:s.request.query,translation:s.request.translation,language:s.request.language,view:s.view??'overview',corpus:s.request.filters.corpus,book:String(s.request.filters.book),form:s.request.filters.form,hidden:Object.entries(s.visibility).filter(([,v])=>!v).map(([k])=>k).join(','),...(s.request.target?{target:s.request.target.id}:{}),saved:s.id})}`}>{s.title} →</a><p>{s.notes}</p></article>)}{!wordStudies.length&&<p>Save a Word Study and attach it to this session to see it here.</p>}</section>
       <section className="class-refs-section">
         <h3>References ({refs.length})</h3>
         <RefList

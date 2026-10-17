@@ -1,3 +1,4 @@
+import type { SavedWordStudy } from '../wordStudy/storage';
 // ============================================================================
 // client.ts — main-thread RPC client for class_* messages.
 //
@@ -55,6 +56,18 @@ class ClassClient {
       const env = { id, db: 'class', type, data };
       this.worker.postMessage(env);
     });
+  }
+
+  wordStudies = {
+    list: () => this.call<SavedWordStudy[]>('class_word_studies', {}),
+    save: (study: SavedWordStudy) => this.call<{ ok: true }>('class_word_save', { study }),
+    delete: (id: string) => this.call<{ ok: true }>('class_word_delete', { id }),
+  };
+
+  dispose() {
+    this.worker.terminate();
+    for (const pending of this.pending.values()) pending.reject(new Error('Class worker restarted'));
+    this.pending.clear();
   }
 
   // ---- Sessions ----
@@ -126,11 +139,14 @@ class ClassClient {
 
 // Singleton, lazy. The caller passes the shared worker on first use.
 let _client: ClassClient | null = null;
-export function initClassClient(worker: Worker): ClassClient {
-  if (!_client) _client = new ClassClient(worker);
+export function initClassClient(worker: Worker | (() => Worker)): ClassClient {
+  if (!_client) _client = new ClassClient(typeof worker === 'function' ? worker() : worker);
+  else if (typeof worker !== 'function') worker.terminate();
   return _client;
 }
 export function getClassClient(): ClassClient {
   if (!_client) throw new Error('class client not initialized; call initClassClient(worker) first');
   return _client;
 }
+
+if (import.meta.hot) import.meta.hot.dispose(() => { _client?.dispose(); _client = null; });

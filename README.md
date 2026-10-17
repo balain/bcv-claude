@@ -24,6 +24,7 @@ See the [User's Guide](GUIDE.md), [Technical Specification](SPEC.md), and
 - **Search settings** — open the gear button to configure combined LXX/GNT searches (enabled by default) and the maximum number of verse hits (200 by default, or unlimited). Preferences are saved locally and apply to searches from word definitions too.
 - **Cross-references** — scroll through all related passages with an eight-word NASB preview, open a target passage, or add a personal reference; saved personal notes appear alongside their references
 - **Bookmarks** — save verses from search, Browse, and Class Mode; reopen them from Browse
+- **Word Study Mode** — study English, Greek, Hebrew, Aramaic, transliterations, forms, and Strong’s identifiers; explore full-corpus frequencies, lexical entries, sourced relationships, and a responsive word map. Save notes, attach studies to Class sessions, compare counts, and export/import studies.
 - **Class Mode** — create sessions, capture references, add reference context notes, and export/import session JSON. Dedicated topic, follow-up, and standalone-note editing controls are not yet enabled.
 - **Distribution chart** — optional bar chart showing hit density across the biblical canon
 - **Book filter** — click any book pill to narrow results to a single book
@@ -247,3 +248,35 @@ overrides, update both `package-lock.json` and `pnpm-lock.yaml` using
 Keep `overrides` and `pnpm.overrides` in `package.json` synchronized.
 CI validates clean installs, security audits, and production builds with both
 package managers. Lint is currently informational until existing errors are fixed.
+
+## Word Study
+
+Open **Word Study** or choose **Study word** from a word definition. English
+input uses the current or last-used English translation. Select a candidate when
+the input is ambiguous, then switch between Overview and Word map. Counts are
+independent of the Search hit limit. Related details start visible; change future
+defaults in Settings or save the current visibility controls as defaults.
+
+The existing build pipeline imports word-study relationships from the installed
+BDB and UBS sources. To add those tables to an existing local Bible database:
+
+```bash
+python3 scripts/word_study_data.py --database data/bcv.db
+```
+
+Refresh the Bible database in the app after updating its data. Class notes and
+saved studies use the separate user database and are preserved. No new sources
+are downloaded by this command. BDB root-section links retain their editorial
+provenance; shared glosses are labeled as lexical discovery. Verified
+translation-specific word alignments are not included in the installed datasets.
+
+Saved studies have their own JSON backup/import controls. Studies attached to a
+Class session are also included in session exports. Standalone study imports
+clear Class attachments because numeric session IDs differ between devices.
+
+Word Study query and persistence regression tests (Node 24 with `node:sqlite`):
+
+```bash
+node --test tests/wordStudy.test.mjs tests/wordStudyStorage.test.mjs
+npm run test:study
+```

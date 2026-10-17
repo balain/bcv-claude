@@ -1,3 +1,5 @@
+import { WordStudyMode } from './components/wordStudy/WordStudyMode';
+import { readEnglish, rememberEnglish } from './lib/wordStudy/settings';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SearchBar } from "./components/SearchBar";
 import { BookNav } from "./components/BookNav";
@@ -35,12 +37,13 @@ const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 // ready on first render — avoids the useEffect timing race when #/class is the
 // initial URL.
 initClassClient(
-  new Worker(new URL("./workers/class.worker.ts", import.meta.url), { type: "module" }),
+  () => new Worker(new URL("./workers/class.worker.ts", import.meta.url), { type: "module" }),
 );
 
 export default function App() {
   const [query, setQuery] = useState("loving");
-  const [source, setSource] = useState<Source>("NASB");
+  const [source, setSource] = useState<Source>(readEnglish);
+  useEffect(() => { rememberEnglish(source); }, [source]);
   const referenceQuery = useMemo(() => parseReferenceQuery(query), [query]);
   const isReferenceSearch = referenceQuery !== null;
   const [referenceErrors, setReferenceErrors] = useState<string[]>([]);
@@ -137,13 +140,18 @@ export default function App() {
     return { bookId: Number(m[1]), chapter: Number(m[2]), verse: vMatch ? Number(vMatch[1]) : 1 };
   }
 
-  function modeFromHash(hash: string): "search" | "browse" | "class" {
+  function modeFromHash(hash: string): "search" | "browse" | "class" | "study" {
+    if (hash.startsWith("#/study")) return "study";
     if (hash.startsWith("#/class")) return "class";
     if (hash.startsWith("#/bcv") || hash.startsWith("#/browse")) return "browse";
     return "search";
   }
 
-  const [mode, setMode] = useState<"search" | "browse" | "class">(() => modeFromHash(location.hash));
+  const [mode, setMode] = useState<"search" | "browse" | "class" | "study">(() => modeFromHash(location.hash));
+  useEffect(() => {
+    if (mode === 'browse') rememberEnglish('NASB');
+    else if (mode === 'search') rememberEnglish(source);
+  }, [mode, source]);
   const [browsePos, setBrowsePos] = useState<{ bookId: number; chapter: number; verse: number } | null>(
     () => parseBrowsePos(location.hash),
   );
@@ -438,13 +446,16 @@ export default function App() {
   return (
     <div className="device-frame">
       {/* App header */}
-      <div
+      <div className="app-header"
         style={{
           background: "var(--navy)",
           padding: "5px 14px 7px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          flexWrap: "wrap",
+          flexShrink: 0,
+          gap: 6,
         }}
       >
         <span
@@ -458,7 +469,7 @@ export default function App() {
         >
           ✞ BibleSearch
         </span>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div className="app-mode-controls" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           {/* Distribution chart (search mode only) */}
           {mode === "search" && (
             <button
@@ -472,16 +483,18 @@ export default function App() {
             >📊</button>
           )}
 
-          {/* Mode nav: Search | Browse | Class */}
-          {(["search", "browse", "class"] as const).map((m) => {
-            const label = m === "search" ? "🔍" : m === "browse" ? "📖" : "📚";
-            const title = m === "search" ? "Search" : m === "browse" ? "Browse" : "Class";
+          {/* Mode nav: Search | Browse | Word Study | Class */}
+          {(["search", "browse", "study", "class"] as const).map((m) => {
+            const label = m === "search" ? "🔍" : m === "browse" ? "📖" : m === "study" ? "Word Study" : "📚";
+            const title = m === "search" ? "Search" : m === "browse" ? "Browse" : m === "study" ? "Word Study" : "Class";
             return (
               <button
                 key={m}
                 onClick={() => {
                   if (m === "search") location.hash = "";
-                  else if (m === "browse") {
+                  else if (m === "study") {
+                    location.hash = "#/study";
+                  } else if (m === "browse") {
                     if (browsePos) {
                       const vQ = browsePos.verse > 0 ? `?v=${browsePos.verse}` : "";
                       location.hash = `#/bcv/${browsePos.bookId}/${browsePos.chapter}${vQ}`;
@@ -537,7 +550,9 @@ export default function App() {
         </div>
       </div>
 
-      {mode === "class" ? (
+      {mode === "study" ? (
+        <WordStudyMode status={dbStatus} onOpenPassage={p => setChapterView({ abbr3:p.abbr,bookName:p.book,chapter:p.chapter,highlightVerse:p.verse,testament:p.bookId<=39?'OT':'NT' })} />
+      ) : mode === "class" ? (
         <ClassMode
           onOpenRef={handleClassRefOpen}
           onBookmark={addBookmark}
@@ -847,6 +862,7 @@ export default function App() {
       )}
 
       <SettingsPanel
+        key={settingsOpen ? "settings-open" : "settings-closed"}
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         themePref={themePref}
