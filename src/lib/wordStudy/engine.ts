@@ -18,6 +18,7 @@ const baseStrong = (value:string) => strongKey(value).replace(/[a-z]+$/, '');
 export function createWordStudyEngine(db: StudyDB) {
     const has = (name: string) => db.rows("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", [name]).length > 0;
     let lexicon: StudyTarget[] | undefined;
+    const definitionWords = new Map<string, Set<string>>();
     let tokenLemmas: {
         lemma: string;
         corpus: string;
@@ -25,10 +26,14 @@ export function createWordStudyEngine(db: StudyDB) {
     function lexemes() {
         if (lexicon)
             return lexicon;
-        lexicon = db.rows('SELECT estrong,dstrong,lang,lemma,gloss,translit,morph FROM lex_brief ORDER BY lang,lemma,estrong').map(r => ({
-            id: `${r[2]}:${r[0]}:${r[1]}:${r[3]}`, lemma: str(r[3]), strong: str(r[0] || r[1]), displayStrong: str(r[1]), lang: r[2] as 'Heb' | 'Grk',
-            gloss: str(r[4]), translit: str(r[5]), language: r[2] === 'Grk' ? 'Greek' : /aramaic|chaldee/i.test(str(r[6])) ? 'Aramaic' : 'Hebrew / Aramaic (unspecified)', reason: '',
-        }));
+        lexicon = db.rows('SELECT estrong,dstrong,lang,lemma,gloss,translit,morph,meaning_plain FROM lex_brief ORDER BY lang,lemma,estrong').map(r => {
+            const id = `${r[2]}:${r[0]}:${r[1]}:${r[3]}`;
+            definitionWords.set(id, new Set(englishWords(str(r[7]))));
+            return {
+                id, lemma: str(r[3]), strong: str(r[0] || r[1]), displayStrong: str(r[1]), lang: r[2] as 'Heb' | 'Grk',
+                gloss: str(r[4]), translit: str(r[5]), language: r[2] === 'Grk' ? 'Greek' : /aramaic|chaldee/i.test(str(r[6])) ? 'Aramaic' : 'Hebrew / Aramaic (unspecified)', reason: '',
+            };
+        });
         if (has('word_languages')) {
             const languages = new Map<string, Set<string>>();
             for (const [strong, language] of db.rows('SELECT DISTINCT strong,language FROM word_languages')) {
@@ -209,8 +214,8 @@ export function createWordStudyEngine(db: StudyDB) {
         result.books = [...books.values()];
         result.totalVerses = hits.length;
         result.passages = hits.slice(Math.max(0, r.page) * PAGE, (Math.max(0, r.page) + 1) * PAGE);
-        const matches = lexemes().filter(e => englishWords(e.gloss).includes(term));
-        result.candidates = [result.target!, ...matches.map(e => ({ ...e, reason: 'English gloss match (not an aligned rendering)' }))];
+        const matches = lexemes().filter(e => englishWords(e.gloss).includes(term) || definitionWords.get(e.id)?.has(term));
+        result.candidates = [result.target!, ...matches.map(e => ({ ...e, reason: englishWords(e.gloss).includes(term) ? 'English gloss match (not an aligned rendering)' : 'English definition match (not an aligned rendering or verified synonym)' }))];
         // Relationships belong to the original-language candidates, not to the English gloss.
         // Display aliases may share a lemma; load that lemma's relationships only once.
         const seen = new Set<string>();

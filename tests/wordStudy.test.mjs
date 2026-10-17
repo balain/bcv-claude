@@ -107,3 +107,16 @@ test('base Strong numbers resolve extended entries without pretending to disting
  const choice=engine.run(req('H1254'));assert.equal(choice.candidates.length,2);assert.equal(choice.target,null);
  const chosen=engine.run(req('H1254a'));assert.equal(chosen.target.strong,'H1254a');assert.equal(chosen.frequencies[0].count,1);assert.ok(chosen.warnings.some(w=>w.includes('extended entries')));db.close();
 });
+
+test('English definition matches expose relationships absent from short glosses',()=>{
+ const {db,engine}=fixture();
+ db.exec(`INSERT INTO lex_brief VALUES('H2617a','H2617a',null,'Heb','חֶסֶד','kindness','chesed','','kindness, lovingkindness');
+ CREATE TABLE word_relations(lemma_key,lang,kind,target_lemma,source,context);
+ INSERT INTO word_relations VALUES('חסד','Heb','synonym','אֱמֶת','ubs-hebrew','Sourced synonym');`);
+ const r=engine.run(req('lovingkindness'));
+ assert.equal(r.relations.length,1);
+ assert.equal(r.relations[0].origin.strong,'H2617a');
+ assert.match(r.candidates.find(c=>c.strong==='H2617a').reason,/definition match/);
+ assert.equal(engine.run(req('loving')).relations.length,0);
+ db.close();
+});
