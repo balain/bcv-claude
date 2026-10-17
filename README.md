@@ -2,14 +2,19 @@
 
 A fast, offline-capable Bible search tool with interlinear Hebrew and Greek, built as a progressive web app using React and SQLite running entirely in the browser.
 
+See the [User's Guide](GUIDE.md), [Technical Specification](SPEC.md), and
+[Sources and Attribution](SOURCES.md) for usage, implementation, and source references.
+
 ## Features
 
-- **Full-text search** across six translations — KJV, ASV, LEB, NASB, Hebrew MT (WLC), LXX, and GNT
+- **Full-text search** across four English translations and three original-language sources — KJV, ASV, LEB, NASB, Hebrew MT (WLC), LXX, and GNT
 - **Phrase search** — wrap terms in double quotes: `"holy spirit"`, `"in the beginning"`
 - **Reference search** — enter verses, chapters, or ranges such as `John 3:16,18; Rom 8:28`, `Psalm 23`, `John 3-4`, or `John 3:16–4:6`. For single-chapter books, `Jude 3` means Jude 1:3. References display NASB with the available interlinear text, ignore the search hit limit, and preserve input order while removing duplicate verses. The Bible order toggle sorts references into canonical order and defaults to off. Invalid references are reported alongside valid results; bare book names remain word searches.
 - **Interlinear display** — every result card shows the underlying Hebrew (WLC) and/or Greek (LXX / GNT) text alongside the English translation
 - **Dual OT interlinear** — OT verses show both the Masoretic (WLC) and Septuagint (LXX) in parallel
 - **Word lookup** — tap any Hebrew or Greek word chip to see its lemma, transliteration, Strong's number, gloss, and full lexical definition
+- **Study lexicons** — switch between BDB and UBS for Hebrew, or LSJ and UBS for Greek. UBS entries retain distinct meanings, semantic domains, and Scripture references. Sources are stored in the main database for offline use.
+- **Source credits** — Settings → Source material credits lists source attribution, license terms, and a download of the adapted UBS data.
 - **English Strong's lookup** — select Strong's beside a single-word English search to browse all Hebrew and Greek lexicon definitions containing that word, then select a lemma to search it.
 - **Lemma / form search** — search from within a word-lookup card to find all occurrences of a root or inflected form
 - **GlossCard** — single-word original-language searches display the word's gloss and meaning above the result list
@@ -17,11 +22,13 @@ A fast, offline-capable Bible search tool with interlinear Hebrew and Greek, bui
 - **Browse chapter navigation** — a single scrolling chapter row stays below the book list while verses scroll. Every book has a numeric chapter jump; chapter buttons, previous/next arrows, passage input, and URL stay synchronized.
 - **Search history** — quick access to your recent searches, persisted locally
 - **Search settings** — open the gear button to configure combined LXX/GNT searches (enabled by default) and the maximum number of verse hits (200 by default, or unlimited). Preferences are saved locally and apply to searches from word definitions too.
-- **Class Mode** — a specialized workspace for teachers and students to manage series, sessions, scripture references, and study notes with a dedicated local database
+- **Cross-references** — scroll through all related passages with an eight-word NASB preview, open a target passage, or add a personal reference; saved personal notes appear alongside their references
+- **Bookmarks** — save verses from search, Browse, and Class Mode; reopen them from Browse
+- **Class Mode** — create sessions, capture references, add reference context notes, and export/import session JSON. Dedicated topic, follow-up, and standalone-note editing controls are not yet enabled.
 - **Distribution chart** — optional bar chart showing hit density across the biblical canon
 - **Book filter** — click any book pill to narrow results to a single book
-- **OPFS caching** — the ~210 MB database is downloaded once and cached in the browser's Origin Private File System; subsequent loads are instant, no network required
-- **LAN access** — `npm run dev` binds to all interfaces so the app is reachable from phones and tablets on the same network
+- **OPFS caching** — the ~295 MB database is downloaded once and cached in the browser's Origin Private File System; subsequent loads are instant, no network required
+- **LAN access** — `npm run dev` binds to all interfaces; accessing from another device requires HTTPS for secure browser storage and isolation features
 
 ## Technology
 
@@ -37,23 +44,38 @@ A fast, offline-capable Bible search tool with interlinear Hebrew and Greek, bui
 
 ### Prerequisites
 
-- Node.js 20+
-- Python 3.9+ (for the ETL script)
-- The data files listed in [Data Sources](#data-sources) placed in `data/`
+- Node.js 24 recommended (CI uses 24); Vite requires Node.js 20.19+ within 20.x, or 22.12+
+- Python 3.10+ for the importer; no third-party Python packages are required
+- The input files listed in [Data Sources](#data-sources), placed in `data/`
+- Network access for npm installation, the explicit BDB/UBS download, and the first OpenBible cross-reference download
 
 ### Install and run
 
 ```bash
-npm install
-python3 scripts/build_db.py   # builds data/bcv.db (~210 MB, ~2–3 min)
+mkdir -p data
+npm ci
+python3 scripts/study_lexicons.py --download  # pinned, openly licensed BDB and UBS sources
+python3 scripts/build_db.py   # builds data/bcv.db (~295 MB)
 npm run dev
 ```
 
 Open `http://localhost:5173` in a browser. On first load the database is
 downloaded and cached in OPFS; subsequent loads skip the network fetch entirely.
 
-To access from other devices on the same network, use your machine's LAN IP
-address (the dev server binds to `0.0.0.0`).
+The dev server binds to `0.0.0.0`. For another device, use an HTTPS reverse
+proxy or trusted local HTTPS setup that preserves the isolation headers below.
+Plain HTTP on a LAN IP does not provide the same secure-context exception as localhost.
+
+The BDB/UBS downloader does not fetch the user-supplied Bible texts or STEP TSV
+files. Obtain those separately; links and pinned source versions are in
+[SOURCES.md](SOURCES.md). The builder also produces `data/ubs-study.json` and
+the optional legacy `data/bcv-lsj.db`. Missing required study files fail the build;
+an unavailable OpenBible download produces a warning and an empty built-in
+cross-reference table. A previously cached `data/cross-references.txt` is reused.
+
+For a local production preview, run `npm run build` followed by `npm run preview`
+and open the URL Vite prints. The preview server serves `data/` at `/db/`.
+Production service-worker caching is enabled in builds, not in `npm run dev`.
 
 ### Build for production
 
@@ -65,14 +87,16 @@ The output in `dist/` is a static site. Serve it with any HTTPS host that can
 set the required security headers:
 
 When hosting under a subdirectory, set the base path when building. For
-`https://zqx6s.uber.space/bcv/`, use:
+`https://example.org/bcv/`, use:
 
 ```bash
 BASE_PATH=/bcv/ npm run build
 ```
 
 Deploy the contents of `dist/` into the server's `/bcv/` directory, and serve
-`data/bcv.db` at `/bcv/db/bcv.db`. Rebuild whenever the hosting path changes;
+`data/bcv.db` at `/bcv/db/bcv.db` and `data/ubs-study.json` at
+`/bcv/db/ubs-study.json`. These files are not copied into `dist/` by the build.
+Rebuild whenever the hosting path changes;
 otherwise JavaScript URLs point to the site root and the page cannot start.
 
 ```
@@ -81,7 +105,10 @@ Cross-Origin-Embedder-Policy: require-corp
 ```
 
 These headers are required by the SharedArrayBuffer API used by SQLite WASM.
-The `vite.config.ts` dev server sets them automatically.
+The `vite.config.ts` dev and preview servers set them automatically. Use HTTPS
+in production, serve `.wasm` as `application/wasm`, and deploy the app and updated
+database together. Do not upload `bible-nau.db`, raw source files, or personal
+session exports as public site assets. The legacy `bcv-lsj.db` is not needed by the app.
 
 ## Data Sources
 
@@ -94,16 +121,43 @@ responsible for obtaining each file under the terms of its respective license.
 | `data/bible-nau.db` | NASB source SQLite export | © The Lockman Foundation — requires a separate license for use or distribution |
 | `data/kjv.txt` | King James Version | Public domain |
 | `data/asv.txt` | American Standard Version (1901) | Public domain |
-| `data/LEB.json` | Lexham English Bible | © Faithlife Corporation — free for non-commercial use with attribution |
-| `data/TBESH.txt` | Translators' Brief Lexicon — Hebrew | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), STEPBible.org / Tyndale House Cambridge |
+| `data/LEB.json` | Lexham English Bible | © Faithlife Corporation — retain the publisher's license and attribution supplied with the text |
+| `data/TBESH.txt` | Hebrew lexical tags, lemmas, and glosses only | CC BY 4.0, STEP Bible / Tyndale House Cambridge. Online Bible abridged-BDB meanings are excluded because they carry a separate permission requirement. |
 | `data/TBESG.txt` | Translators' Brief Lexicon — Greek | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), STEPBible.org / Tyndale House Cambridge |
 | `data/TFLSJ.txt` | Translators' Formatted LSJ (full Greek lexicon) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), STEPBible.org / Tyndale House Cambridge |
+| `data/TFLSJ-extra.txt` | Additional biblical Greek LSJ entries, when supplied | CC BY 4.0, STEP Bible / Tyndale House Cambridge |
+| `data/study-sources/{BrownDriverBriggs,LexicalIndex,AugIndex}.xml` | Open Scriptures BDB transcription and identifiers | CC BY 4.0, Open Scriptures Hebrew Bible Project; original BDB text is public domain. Transcription is incomplete. |
+| `data/study-sources/ubs-greek.json` | UBS Dictionary of New Testament Greek, English v1.1 | CC BY-SA 4.0, © United Bible Societies 2023; adapted from SDGNT and Louw–Nida, with SIL Scripture references |
+| `data/study-sources/ubs-hebrew.json` | UBS Dictionary of Biblical Hebrew, English v0.9.3 | CC BY-SA 4.0, © United Bible Societies 2023; adapted from SDBH © 2000–2023 UBS; coverage is incomplete |
+| `data/cross-references.txt` | OpenBible.info cross-references; downloaded automatically when absent | CC BY 4.0; primarily based on the public-domain Treasury of Scripture Knowledge |
+
+Source repository links, pinned revisions, full attribution, transformation notes,
+and the distinction between original text and electronic annotations are in
+[SOURCES.md](SOURCES.md). `TFLSJ-extra.txt` is optional; `TFLSJ.txt` supplies
+the primary biblical LSJ entries. STEP files must retain their TSV column header.
+
+The download script pins BDB and UBS source revisions and writes a SHA-256
+manifest alongside their attribution/license files. The importer converts source
+XML/JSON/TSV into plain-text definitions and normalized lookup keys, preserving
+UBS senses and semantic domains. UBS reference word offsets are omitted from
+displayed verse references. These changes are recorded in `study_sources`.
+Adapted UBS entries in `study_entries` and their identifiers in `study_strongs`
+remain licensed under **CC BY-SA 4.0**, independently of the MIT application code
+and the other data. The builder also exports `data/ubs-study.json` with attribution,
+license information, and the adapted UBS entries. Ship that file at
+`/db/ubs-study.json` alongside `/db/bcv.db` so the credits download works.
+Retain these notices and the share-alike license when redistributing UBS adaptations.
+
+Study lexicons now live in `bcv.db` (approximately 295 MB with the current inputs).
+The optional legacy `bcv-lsj.db` is still built for compatibility, but the app does
+not need it. Deploy the updated app and database together. This release uses a
+new OPFS cache key so existing clients download the updated database once.
 
 The Hebrew interlinear text (Westminster Leningrad Codex) and the Greek NT
 interlinear (Robinson-Pierpont GNT 2005, dedicated to the public domain) are
 embedded in `bible-nau.db`. The LXX interlinear is derived from the CATSS
-project (based on Rahlfs' 1935 Septuagint edition, which is in the public
-domain in most jurisdictions).
+project. Redistribution rights for its electronic transcription and annotations
+must be checked separately from the underlying Rahlfs edition.
 
 > **Important:** This application's source code is released under the MIT
 > License. Bible text content and lexicon data are not covered by that license.
@@ -114,17 +168,38 @@ domain in most jurisdictions).
 
 If you rebuild `bcv.db` (e.g., after adding new data), browsers that have
 already cached the old database will continue to serve it from OPFS until you
-clear it. To force a fresh download:
+clear it. Use the header's **↻ Re-download database** button to replace the Bible
+cache and reload the app. This leaves Class Mode data alone. If that fails:
 
 - Chrome/Edge: DevTools → Application → Storage → Clear site data
 - Firefox: DevTools → Storage → Clear All
+
+Clearing all site data also removes personal Class Mode data, bookmarks, history,
+and preferences. Export each Class session first. Browser storage is tied to the
+origin: changing scheme, host, or port creates a separate local store.
+
+## Validation
+
+```bash
+npm run build
+npm run test:references
+npm run test:study
+npm run lint
+```
+
+Reference-parser tests use Node's built-in test runner. Study-import tests use
+Python's standard-library `unittest` and temporary fixtures; neither test command
+needs downloaded Bible data. A successful build bundles the app but does not
+rebuild or validate the contents of `data/bcv.db`. Lint currently reports existing
+issues and is informational in CI.
 
 ## Project Structure
 
 ```
 bcv-claude/
 ├── scripts/
-│   └── build_db.py          # ETL: builds data/bcv.db from raw sources
+│   ├── build_db.py          # ETL: main DB, UBS export, legacy LSJ DB
+│   └── study_lexicons.py    # Pinned source downloads and study importer
 ├── src/
 │   ├── App.tsx              # Root component, global state
 │   ├── types.ts             # Shared TypeScript interfaces
@@ -137,15 +212,23 @@ bcv-claude/
 │   │   ├── ResultCard.tsx   # Single search-result card with interlinear
 │   │   ├── WordChip.tsx     # Tappable original-language word token
 │   │   ├── DefinitionSheet.tsx  # Word definition bottom sheet
-│   │   └── ChapterView.tsx  # Full-chapter reading overlay
+│   │   ├── ChapterView.tsx  # Full-chapter reading overlay / embedded Browse view
+│   │   ├── CrossRefList.tsx # Scrollable related passages and previews
+│   │   ├── SettingsPanel.tsx # Search, appearance, and source-credit link
+│   │   └── SourceCredits.tsx # Attribution and license view
 │   ├── lib/
 │   │   ├── db.ts            # Main-thread RPC client for db.worker.ts
-│   │   └── search.ts        # Distribution-chart helper
+│   │   ├── referenceSearch.ts # Passage-list and range parser
+│   │   ├── sourceCredits.ts # In-app source metadata
+│   │   └── class/          # Personal data schema, client, import/export
 │   └── workers/
-│       └── db.worker.ts     # SQLite worker: search, lookup, chapter fetch
+│       ├── db.worker.ts     # Bible search, study lookup, chapter / cross-ref fetch
+│       └── class.worker.ts  # Personal session / cross-reference data
 ├── data/                    # gitignored — user-provided sources + built DB
+├── tests/                   # Reference parser and study importer regression tests
 ├── SPEC.md                  # Technical specification
 ├── GUIDE.md                 # User's guide
+├── SOURCES.md               # Source links, revisions, attribution, licenses
 ├── LICENSE                  # MIT (source code only)
 └── README.md
 ```

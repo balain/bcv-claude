@@ -1,418 +1,239 @@
 # BibleSearch — Technical Specification
 
-## Overview
-
-BibleSearch is a single-page application that runs an SQLite database entirely
-inside the browser. All search and lookup operations execute in a dedicated Web
-Worker against an in-memory copy of the database; the main thread communicates
-with the worker via a simple message-passing RPC protocol. No server is required
-at runtime.
-
----
+This describes the current implementation. See [README.md](README.md) for setup
+and deployment, [GUIDE.md](GUIDE.md) for usage, and [SOURCES.md](SOURCES.md) for
+data provenance and licenses.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Browser Main Thread                                         │
-│                                                              │
-│  App.tsx ──→ SearchBar / BookNav / MiniChart / GlossCard    │
-│           ──→ ResultCard ──→ WordChip                        │
-│           ──→ DefinitionSheet / SearchHistory                │
-│           ──→ ChapterView ──→ WordChip / DefinitionSheet     │
-│           ──→ ClassMode ──→ SessionList / SessionView        │
-│                                                              │
-│  lib/db.ts        (DBClient singleton) ──→ bcv-worker        │
-│  lib/class/db.ts  (ClassClient singleton) ──→ class-worker    │
-│                                                              │
-│       │                                                      │
-│       │  postMessage / onMessage (structured clone)          │
-│       ▼                                                      │
-├───────────────────────────────┬──────────────────────────────┤
-│  Web Worker (db.worker.ts)    │ Web Worker (class.worker.ts) │
-│                               │                              │
-│  OPFS cache ──→ deserialize   │ IDB / OPFS ──→ class.db      │
-│  FTS5 search / chapter fetch  │ Sessions / Refs / Notes      │
-└───────────────────────────────┴──────────────────────────────┘
+React 19 and TypeScript run in a Vite 8 PWA. A static HTTPS host serves the app,
+SQLite WASM, and reference data; no application server or account is required.
 
-  OPFS (Origin Private File System)
-    bcv.db    ← written once on first download, read on every load
-    class.db  ← persistent user data for Class Mode
-```
-
-### Dual-Worker Architecture
-
-The application uses two separate Web Workers to isolate heavy database operations:
-
-1.  **Bible Worker (`db.worker.ts`)**: Manages the large (~210 MB) read-only Bible database. It handles FTS5 searching, chapter fetching, and interlinear data assembly. The database is stored in OPFS for fast access.
-2.  **Class Worker (`class.worker.ts`)**: Manages the persistent user database (`class.db`). It handles CRUD operations for teaching sessions, series, and notes. This database is also stored in OPFS (via `sqlite-wasm` VFS) to ensure user data survives browser restarts.
-
-### Key constraints
-
-- **SharedArrayBuffer** (required by `@sqlite.org/sqlite-wasm`) needs both
-  `Cross-Origin-Opener-Policy: same-origin` and
-  `Cross-Origin-Embedder-Policy: require-corp` response headers.
-- **`createSyncAccessHandle`** (used for writing the OPFS cache) is only
-  available in dedicated workers — not in the main thread or shared workers.
-- Vite 8 uses Rolldown instead of Rollup; `vite-plugin-wasm` and
-  `vite-plugin-top-level-await` are incompatible and are not used.
-
----
-
-## Database Schema
-
-Built by `scripts/build_db.py` from user-provided source files.
-Output: `data/bcv.db` (~210 MB).
-
-### `book_meta`
-
-| Column | Type | Notes |
+| Layer | Implementation | Responsibility |
 |---|---|---|
-| `id` | INTEGER PK | Canonical order (1 = Genesis … 66 = Revelation) |
-| `abbr3` | TEXT | Three-letter abbreviation, e.g. `Gen`, `1Co` |
-| `osis` | TEXT | OSIS book ID |
-| `name` | TEXT | Full English name |
-| `testament` | TEXT | `OT` or `NT` |
-| `chapters` | INTEGER | Total chapter count |
+| Bible client | `src/lib/db.ts` | Singleton RPC client for search, lookup, chapter and cross-reference requests |
+| Bible worker | `src/workers/db.worker.ts` | In-memory SQLite reference DB, loaded from OPFS byte cache or network |
+| Class client | `src/lib/class/client.ts` | Lazy singleton for session and personal-data requests |
+| Class worker | `src/workers/class.worker.ts` | Independent SQLite instance and persistent personal database |
+| Cross-reference overlay | `src/lib/crossRefs.ts` | Combines built-in and personal references, personal first |
+| Service worker | `src/sw.ts` | Precaches production assets and injects isolation headers into cached navigation responses |
 
-### `verses`
+RPC uses structured-clone messages, request IDs, and Promise resolvers. Class
+requests received before initialization are queued. SQLite requires a secure
+context and cross-origin isolation: COOP `same-origin` and COEP `require-corp`.
+Dev and preview servers set these headers; production hosts must do so too.
+HTTP localhost is supported, but a plain HTTP LAN IP is not equivalent.
+WASM uses Vite's URL import; no WASM or top-level-await plugin is needed.
 
-| Column | Type | Notes |
+## Setup and deployment
+
+Use Node.js 24 as in CI; Vite's engine range is `^20.19.0 || >=22.12.0`.
+Use Python 3.10+ with its standard library for import.
+
+1. Install dependencies with `npm ci` or `pnpm install --frozen-lockfile`.
+2. Supply the licensed Bible DB/text files and STEP TSVs listed in the README.
+3. Run `python3 scripts/study_lexicons.py --download` for pinned BDB/UBS inputs.
+4. Run `python3 scripts/build_db.py`, then `npm run dev`.
+
+| Output | Purpose | Deployment |
 |---|---|---|
-| `book_id` | INTEGER FK → book_meta.id | |
-| `chapter` | INTEGER | |
-| `verse` | INTEGER | |
-| `translation` | TEXT | `KJV`, `ASV`, `LEB`, `NASB`, `Heb` (transliteration), `GNT` (transliteration) |
-| `text` | TEXT | Verse text |
+| `data/bcv.db` | Bible texts, interlinear tokens, brief/study lexicons, cross-references; about 295 MB with current inputs | Required at `<base>/db/bcv.db` |
+| `data/ubs-study.json` | Adapted UBS entries, identifiers, credits, license and change notes | Credits download at `<base>/db/ubs-study.json` |
+| `data/bcv-lsj.db` | Legacy standalone LSJ DB | Built for compatibility; not loaded by the app |
+| `dist/` | App, workers, WASM, service worker | Generated by `npm run build` |
 
-FTS5 virtual table `verses_fts` mirrors `(translation, text)`.
+Vite serves `data/` at `/db/` in dev/preview. The build does not copy these data
+files to `dist/`. For subdirectory hosting, set `BASE_PATH=/bcv/` during build
+and publish app and data at that base. Keep raw sources, source DBs, and personal
+exports out of public assets. The service worker caches production app assets,
+not the large DB or UBS JSON. External links and the credits download need network.
 
-### `tokens`
+## Reference schema
 
-One row per word token in the interlinear texts.
+Definitions live in `scripts/build_db.py` and `scripts/study_lexicons.py`.
+The main DB currently has `PRAGMA user_version=2`.
 
-| Column | Type | Notes |
+| Table | Fields / key | Notes |
 |---|---|---|
-| `id` | INTEGER PK | |
-| `book_id` | INTEGER FK → book_meta.id | |
-| `chapter` | INTEGER | |
-| `verse` | INTEGER | |
-| `word_num` | INTEGER | 1-based position within verse |
-| `corpus` | TEXT | `WLC` (Hebrew MT), `LXX` (Septuagint), `GNT` (Greek NT) |
-| `surface` | TEXT | Surface form with pointing/accents |
-| `translit` | TEXT | Latin transliteration |
-| `gloss` | TEXT | Brief English gloss |
-| `lemma` | TEXT | Dictionary form |
-| `strong` | TEXT | Strong's number (e.g. `H1234`, `G0001`) |
-| `morph` | TEXT | Morphology code |
+| `book_meta` | `id`, `abbr3`, `osis`, `name`, `testament`, `chapters` | Canonical IDs 1–66; agrees with `src/lib/books.ts` |
+| `verses` | Book/chapter/verse/translation key; `text` | English texts plus Hebrew/GNT transliteration rows |
+| `tokens` | `id`, book/chapter/verse, `word_num`, `corpus`, `surface`, `translit`, `gloss`, `lemma`, `strong`, `morph` | Corpora WLC, LXX, GNT |
+| `lex_brief` | Composite key `dstrong`, `lang`; `estrong`, `ustrong`, `lemma`, `translit`, `morph`, `gloss`, `meaning`, `meaning_plain` | STEP brief entries; restricted Hebrew meanings replaced with matching Open Scriptures BDB text |
+| `lex_names` | `key`, `dstrong`, `lang`, `description`, `refs` | Optional name sections from STEP input |
+| `cross_refs` | Source/target book/chapter/verse, optional target end, `votes`, `source_dataset` | Indexed by source and target; duplicate source/target/dataset rows excluded |
+| `study_sources` | `id`, `revision`, `attribution`, `license`, `url`, `changes` | IDs `bdb`, `lsj`, `ubs-greek`, `ubs-hebrew` |
+| `study_entries` | `id`, `source`, `lang`, `lemma`, `lemma_key`, JSON `senses` | Index on language, normalized lemma, source |
+| `study_strongs` | Composite key `entry_id`, `strong` | Multiple identifiers per entry; multiple entries per identifier |
 
-FTS5 virtual table `tokens_fts` mirrors `(corpus, surface, translit, gloss, lemma)`.
+FTS5 external-content tables `verses_fts` and `tokens_fts` mirror searchable
+verse/token fields with `unicode61 remove_diacritics 2`. Current token counts
+are approximately WLC 305,572; LXX 507,306; GNT 137,554.
 
-Token counts (approximate):
+Current study counts: BDB 10,175; LSJ 11,033; UBS Greek 5,478; UBS Hebrew 7,875.
+Counts depend on supplied files and versions. BDB transcription and UBS Hebrew
+coverage remain incomplete. The legacy DB has `lex_lsj` and `lex_lsj_fts`, with
+plain definitions and citation JSON; runtime uses the main study tables instead.
 
-| Corpus | Tokens |
+## Personal storage and Class Mode
+
+The Class worker tries the `bcv-class-pool` OPFS SAH-pool VFS, then `OpfsDb`,
+then memory. Initialization reports `storageMode`. Memory fallback loses data
+on reload; there is no server-side sync.
+
+`src/lib/class/schema.ts` defines version 2 and migrations. Tables include
+`_meta`, `series`, `sessions`, `scripture_refs`, `topics`, `session_topics`,
+`notes`, `follow_ups`, `follow_up_refs`, `follow_up_lex`, `lex_marks`, and
+`user_cross_refs`. Most editable entities use external UUIDs, timestamps, and
+soft deletion, with `v_*` views filtering tombstones. Personal cross-references
+store source/target verses, optional session/note, and creation context.
+
+The UI supports session creation/listing, reference capture, anchors, reference
+context-note edits, deletion, and session export/import. Standalone note, topic,
+and follow-up buttons are disabled despite their underlying schema/APIs.
+Series/location metadata can appear from existing/imported records.
+
+Session exports use `class.session/v1`: session, associated series, references,
+topics/links, notes, lexical marks, and follow-ups. Imports match external IDs
+and merge by update timestamps, including tombstones. Exports omit personal
+cross-reference overlays and localStorage state; they are not complete browser
+or Class DB backups. Bookmarks, history, search settings, theme, and font size
+are stored separately in localStorage. All browser storage is origin-specific.
+
+## Import pipeline
+
+`study_lexicons.py --download` retrieves pinned BDB/UBS inputs and notices,
+recording URLs and SHA-256 hashes in `data/study-sources/manifest.json`.
+It does not download Bible texts or STEP TSVs.
+
+`build_core()` constructs `data/bcv.building.db` and publishes by replacing
+`bcv.db` only after completion:
+
+1. Create core schema and book metadata.
+2. `load_lex_brief`: import STEP tags and Greek meanings; exclude Online Bible
+   Hebrew meanings carrying a separate permission requirement.
+3. `load_study`: BDB XML/index/augmented IDs, UBS JSON, and LSJ through the STEP
+   parser. Missing required files fail the build.
+4. Populate brief Hebrew definitions from matching BDB entries, retaining all
+   matching definitions rather than selecting one homonym. Set user version 2.
+5. Load NASB, KJV, ASV, LEB, Hebrew/GNT verse rows and WLC/GNT/LXX tokens;
+   Greek enrichment uses exact and normalized lemma matching.
+6. Import OpenBible references from cache or download. Download failure warns
+   and leaves these references empty. Optional `data/josephilipraja/` inputs
+   have separate GPL-2.0 terms and are not downloaded by default.
+7. Rebuild FTS indexes, `ANALYZE`, export UBS JSON with metadata/Strong's mappings,
+   `VACUUM`, and publish the completed core DB.
+8. Build the legacy LSJ DB.
+
+BDB rendering preserves numbered senses and omits transcription status tags.
+UBS retains lexical meanings, English glosses, semantic domains, usage notes,
+and referenced footnotes. Inline codes become readable labels; word-position
+references become deduplicated verse labels. LSJ becomes plain text with
+anchor-title bibliography retained as literary citations. Transformations are
+recorded in `study_sources`; adapted UBS data retains CC BY-SA 4.0.
+
+## Bible worker RPC
+
+Requests carry string `id`, `type`, and the following payload. Replies use
+`{ id, ok: true, data }` or `{ id, ok: false, error }`.
+
+| `type` | Payload |
 |---|---|
-| WLC (Hebrew OT) | 305,572 |
-| LXX (Greek OT) | 507,306 |
-| GNT (Greek NT) | 137,554 |
-
-### `lex_brief`
-
-One row per lexicon entry.
-
-| Column | Type | Notes |
-|---|---|---|
-| `estrong` | TEXT | Extended Strong's (e.g. `H0001a`) |
-| `dstrong` | TEXT | Display Strong's (e.g. `H0001`) |
-| `ustrong` | TEXT | Unified Strong's (nullable) |
-| `lang` | TEXT | `Heb` or `Grk` |
-| `lemma` | TEXT | Dictionary form (nullable) |
-| `translit` | TEXT | Latin transliteration (nullable) |
-| `morph` | TEXT | Morphology summary (nullable) |
-| `gloss` | TEXT | Brief English gloss (nullable) |
-| `meaning_plain` | TEXT | Full plain-text definition (nullable) |
-
-Sourced from STEPBible TBESH (Hebrew) and TBESG (Greek) TSV files.
-Approximately 22,700 entries total (11,682 Hebrew + 11,035 Greek).
-
-### Class Database (`class.db`)
-
-Managed by the Class Worker. Persistent user data.
-
-#### `series`
-Groups sessions together (e.g., "Gospel of John").
-- `external_id`: UUID for syncing.
-- `title`, `description`, `started_on`, `ended_on`.
-
-#### `sessions`
-A single teaching event.
-- `series_id`: FK to `series`.
-- `title`, `taught_on`, `location`, `primary_text`.
-- `status`: `active` or `archived`.
-
-#### `scripture_refs`
-Scripture references captured during a session.
-- `session_id`: FK to `sessions`.
-- `book_id`, `chapter`, `verse_start`, `verse_end`.
-- `raw_input`: The original text entered (e.g., "Jn 3:16").
-- `context_note`: Optional teacher note.
-
-#### `topics`
-Taxonomy for tagging sessions.
-- `name`, `parent_id`, `description`.
-
-#### `notes`
-Rich text or plain text notes tied to a session and optionally a reference.
-- `session_id`, `ref_id`, `topic_id`, `body`.
-
-#### `follow_ups`
-Tasks or questions to be addressed later.
-- `kind`: `question`, `word_study`, `cross_ref`, etc.
-- `status`: `open`, `in_progress`, `done`, `dropped`.
-
----
-
-## ETL Pipeline (`scripts/build_db.py`)
-
-Load order is critical — lexicons must be built before tokens so gloss data is
-available during token import.
-
-1. Create `book_meta`, `verses`, `tokens`, `lex_brief`, `lex_names` tables
-2. **`load_lex_brief`** — parse TBESH and TBESG TSV files; build in-memory
-   dicts keyed by exact lemma and by NFD-stripped/lowercased lemma for fuzzy
-   matching
-3. **`load_verses_nasb`** — import from `bible-nau.db` SQLite source
-4. **`load_tokens_wlc`** — import Hebrew interlinear from `bible-nau.db`
-5. **`load_tokens_gnt`** — import Greek NT interlinear from `bible-nau.db`;
-   enrich gloss/strong via `_lex_lookup()` with Unicode normalization
-6. **`load_tokens_lxx`** — import LXX interlinear; same enrichment
-7. **`load_verses_kjv`**, **`load_verses_asv`**, **`load_verses_leb`** — import
-   remaining English translations
-8. Build FTS5 virtual tables (`verses_fts`, `tokens_fts`) with
-   `unicode61 remove_diacritics 2` tokenizer
-9. `ANALYZE` + `VACUUM`
-
-### Unicode normalization for lexicon lookup
-
-Greek lemmas from different sources may use different Unicode normalization
-forms and may or may not carry diacritical marks. `_strip_diacritics(s)` applies
-NFD decomposition and removes characters in Unicode category `Mn` (non-spacing
-marks), then lowercases. Both the exact form and the stripped form are indexed,
-and `_lex_lookup()` tries exact first, then stripped — achieving ~98% gloss
-coverage for GNT and ~95% for LXX tokens.
-
----
-
-## Worker RPC Protocol
-
-All messages are plain JavaScript objects transferred via `postMessage` (no
-transferable objects).
-
-### Request messages (main thread → worker)
-
-```ts
-{ id: string; type: 'search';               query: string; source: Source }
-{ id: string; type: 'lookup';               strong: string }
-{ id: string; type: 'lookup_lemma';         lemma: string; lang: 'Heb' | 'Grk' }
-{ id: string; type: 'fetch_chapter';        abbr3: string; chapter: number; translation: string }
-{ id: string; type: 'fetch_chapter_originals'; abbr3: string; chapter: number; testament: 'OT' | 'NT' }
-```
-
-### Response messages (worker → main thread)
-
-```ts
-// Success
-{ id: string; ok: true;  data: any }
-// Error
-{ id: string; ok: false; error: string }
-// Status broadcasts (no id)
-{ type: 'ready' }
-{ type: 'progress'; message: string }
-{ type: 'error';    message: string }
-```
-
-`DBClient` in `lib/db.ts` wraps these into Promises using a `Map<id, {resolve, reject}>` pending table and a monotonically-increasing sequence number.
-
----
-
-## Search Algorithm
-
-### English search (`Source ∈ {KJV, ASV, LEB, NASB}`)
-
-```sql
-WITH hits AS (
-  SELECT book_id, chapter, verse, text, abbr3, name, testament
-  FROM verses JOIN book_meta …
-  WHERE translation = ?translation
-    AND rowid IN (SELECT rowid FROM verses_fts WHERE verses_fts MATCH ?fts)
-  ORDER BY book_id, chapter, verse LIMIT 200
-)
-SELECT … FROM hits
-LEFT JOIN tokens t ON … AND corpus IN ('WLC','LXX') -- OT
-                          OR corpus = 'GNT'          -- NT
-ORDER BY book_id, chapter, verse, corpus_order, word_num
-```
-
-Results carry both WLC and LXX sections for OT verses, enabling the dual
-interlinear display.
-
-### Original-language search — OT (`Source ∈ {Heb, LXX}`)
-
-Searches `tokens_fts` on the target corpus (`WLC` for Heb, `LXX` for LXX),
-then joins *both* WLC and LXX tokens so the result card shows both versions
-regardless of which corpus matched.
-
-### Original-language search — NT (`Source = GNT`)
-
-Searches `tokens_fts` filtered to `corpus = 'GNT'` and joins GNT tokens only.
-
-### Phrase search
-
-`ftsEscape(q)` detects a phrase query: a string that starts and ends with a
-double-quote character. The interior is passed through as a single FTS5 phrase
-token (`"word1 word2"`). Non-phrase queries are split on whitespace and each
-term is individually quoted.
-
-### Result cap
-
-All hit CTEs use `LIMIT 200`. The UI displays a warning badge when the result
-count equals 200.
-
-### Highlighting
-
-After DB results are assembled, each token's `highlight` flag is set client-side
-by checking whether the query string (lowercased) appears in the token's gloss,
-transliteration, or surface form. This drives amber/indigo colouring of word
-chips in the interlinear and the match-word highlight in English verse text.
-
----
-
-## OPFS Caching
-
-```
-First load:
-  fetch /db/bcv.db  →  Uint8Array
-  validate magic bytes ("SQLite format 3") + minimum size (10 MB)
-  write to OPFS via createSyncAccessHandle (worker-only API)
-  sqlite3_deserialize into in-memory DB
-
-Subsequent loads:
-  readOpfsCache()  →  Uint8Array (from OPFS file)
-  validate
-  sqlite3_deserialize (skips network fetch)
-```
-
-If the OPFS entry is absent, too small, or has bad magic bytes, the cache is
-bypassed and a fresh network fetch occurs.
-
-**Cache invalidation:** there is no automatic version check. After rebuilding
-`bcv.db`, clear the OPFS cache manually via DevTools → Application → Storage →
-Clear site data.
-
----
-
-## Component Contracts
-
-### `App`
-
-Owns global state: `query`, `source`, `results`, `activeBook`, `dbStatus`,
-`chapterView`, `glossEntry`, `glossCardOpen`, `selectedWord`, `selectedLang`.
-
-Key derived values:
-- `filtered` — `results` filtered by `activeBook`
-- `books` — unique books from `results`, OT before NT
-- `distribution` — bar-chart data from `computeDistribution(results)`
-
-### `SearchBar`
-
-Props: `collapsed`, `onToggle`, `query`, `source`, `onGo(query, source)`.
-Manages its own draft state; calls `onGo` only on explicit submit (Go button or
-Enter key). Shows a "phrase" pill when query is a quoted phrase.
-
-### `ResultCard`
-
-Props: `result: BibleResult`, `onWordTap(word, lang)`, `onEngWordClick(word)`,
-`onRefClick(result)`.
-
-Internal state: `expanded` (card body), `interlinearOpen` (originals section).
-`interlinearOpen` defaults to `true` for original-language source searches,
-`false` for English source searches. Clicking anywhere in the interlinear area
-(except a word chip) toggles `interlinearOpen`.
-
-### `ChapterView`
-
-Props: `abbr3`, `bookName`, `chapter` (initial), `highlightVerse`, `testament`,
-`onClose`, `onSearch(query, source)`.
-
-Internal state: `currentChapter`, `currentHighlight`, `totalChapters`,
-`verses`, `verseOriginals`, `originalsOpen`, `selectedWord`, `selectedLang`.
-
-Fetches chapter verses and original-language tokens in parallel on mount and on
-every chapter change. The highlighted verse is scrolled into view after data
-loads; navigating to a different chapter resets the highlight and scrolls to
-top. Renders `DefinitionSheet` for word lookups within its own stacking context
-(z-index 200); `DefinitionSheet` at z-index 100 is relative to ChapterView's
-positioned container.
-
-### `DefinitionSheet`
-
-Props: `word: WordToken`, `lang: Lang`, `onClose`, `onSearch(query, source)`.
-
-Fetches the lex entry by Strong's number first, falling back to lemma lookup.
-Derives the search source from `word.corpus` so LXX words search LXX, GNT
-words search GNT, and WLC words search Heb.
-
-### `GlossCard`
-
-Props: `entry: LexEntry`, `lang: Lang`, `open: boolean`, `onToggle`.
-
-Stateless display card. The parent (`App`) derives the entry from the first
-highlighted token in the search results (not via a separate DB query) and
-persists `open` across searches.
-
----
-
-## TypeScript Interfaces
-
-### `types.ts`
-
-```ts
-type Lang   = 'Heb' | 'Grk';
-type Source = 'KJV' | 'ASV' | 'LEB' | 'NASB' | 'Heb' | 'LXX' | 'GNT';
-type Testament = 'OT' | 'NT';
-
-interface WordToken {
-  surface: string; translit: string; gloss: string;
-  root: string | null; strong?: string | null; lemma?: string | null;
-  meaning?: string | null; form?: string | null; highlight?: boolean;
-  corpus?: 'WLC' | 'GNT' | 'LXX';
-}
-
-interface OriginalSection {
-  corpus: 'WLC' | 'GNT' | 'LXX';
-  lang: Lang;
-  tokens: WordToken[];
-}
-
-interface BibleResult {
-  ref: string; book: string; bookAbbr: string; testament: Testament;
-  chapter: number; verse: number; lang: Lang; source: Source;
-  english: string; matchWord: string; originals: OriginalSection[];
-}
-```
-
-### `lib/db.ts` (additional types)
-
-```ts
-interface ChapterVerse       { verse: number; text: string; }
-interface ChapterFetchResult { verses: ChapterVerse[]; totalChapters: number; }
-interface ChapterVerseOriginals {
-  verse: number;
-  originals: { corpus: 'WLC'|'LXX'|'GNT'; lang: 'Heb'|'Grk'; tokens: TokenShape[] }[];
-}
-interface LexEntry {
-  estrong: string; dstrong: string; ustrong: string | null;
-  lang: string; lemma: string | null; translit: string | null;
-  morph: string | null; gloss: string | null; meaning: string | null;
-}
-```
+| `search` | `query`, `source`, `combineGreek`, `maxHits` (positive integer or null) |
+| `search_references` | `query` |
+| `lookup` | `strong` |
+| `lookup_lemma` | `lemma`, `lang` (`Heb` or `Grk`) |
+| `study_lookup` | Optional `strong`, optional `lemma`, `lang` |
+| `search_definitions` | English `word` |
+| `fetch_chapter` | `abbr3`, `chapter`, `translation` (client uses NASB) |
+| `fetch_chapter_originals` | `abbr3`, `chapter`, `testament` |
+| `fetch_cross_refs` | `bookId`, `chapter`, `verse` |
+| `fetch_cross_refs_bulk` | `verses` array with book/chapter/verse |
+| `force_refresh` | None; asynchronously replace Bible cache, then client reloads |
+
+Broadcasts are `{ type: 'ready' }`, `{ type: 'progress', message }`, or
+`{ type: 'error', message }`. Searches return `results`, `totalHits`, `hitsByBook`,
+and optional reference `errors`. Authoritative types are in `src/types.ts` and
+`src/lib/db.ts`, including `LexEntry`, `CrossRef`, `StudyEntry`, and `StudySense`.
+
+## Search and lookup
+
+English keywords search verse FTS in the selected translation. Original-language
+queries search token fields. OT results assemble WLC and LXX sections; NT results
+assemble GNT. LXX/GNT queries combine both corpora by default; disabling
+`combineGreek` restricts the selected corpus. Hebrew queries remain WLC-only.
+Original-language results use NASB English text.
+
+`ftsEscape` quotes terms or recognizes an enclosing double-quoted phrase. The
+worker searches NFC and corresponding Greek tonos/oxia spellings. This does not
+guarantee complete accent-insensitive Greek/Hebrew matching. Study lookup uses
+a separate normalized lemma key with Unicode marks removed.
+
+`maxHits` defaults to 200; null becomes SQLite `LIMIT -1`. Separate count queries
+return totals by book across all matches. Testament/book filters act on loaded
+results, not a fresh filtered database query. Raise the cap to load later matches.
+
+`DBClient.search` detects references before keyword dispatch. The parser in
+`src/lib/referenceSearch.ts` handles aliases, verse lists, chapters/ranges,
+cross-chapter ranges, and single-chapter books. It preserves input order,
+deduplicates verses, and reports invalid portions alongside valid results.
+References use NASB and ignore `maxHits`; canonical order is a UI option.
+Bare book names remain keyword searches.
+
+Brief lookup uses Strong's then lemma fallback. English definition search uses
+whole-word filtering against `lex_brief` gloss/meaning, not full study entries.
+Study lookup prefers exact normalized Strong's IDs per source, with normalized
+lemma fallback for sources without an exact match. Identifier suffixes are
+preserved; UBS Aramaic `A` codes map to Hebrew `H` numbering. Multiple dictionary
+matches stay separate. Older DBs without study tables produce an explicit
+study-lookup error and suppress their earlier Hebrew brief meanings.
+
+## Cache and offline use
+
+Network URL: `<BASE_URL>db/bcv.db`. OPFS cache name: `bcv-study-v1.db`, forcing a
+one-time replacement of the older `bcv.db` cache. Reads reject entries below
+10 MB or with invalid SQLite header/page-size checks. Writes use synchronous
+access handles in 4 MB chunks, truncate/flush, and verify length; the old cache
+is removed only after its replacement is saved. Cache failure falls back to
+memory and can require another download later.
+
+Bytes are deserialized into SQLite memory and NASB rows are checked. There is
+no routine remote revision check. After rebuilding data under the same cache
+name, use the header refresh control. It preserves Class data. Clearing all
+site storage also removes personal data/preferences. Production shell caching
+supports offline revisits; first loads, missing downloads, and external links
+need network. Browser storage may be cleared or evicted.
+
+## UI contracts
+
+| Component | Current behavior |
+|---|---|
+| `App` | Mode/hash navigation, query/results, book/Testament filters, counts, settings, selected word/chapter |
+| `SearchBar` | Draft query/source, explicit submit, phrase indicator, reference-aware NASB and combined-Greek labels |
+| `BcvBrowser` / `ChapterNavigation` | Books, fixed scrolling chapter row, numeric jump, passage field, synchronized URL, bookmarks |
+| `ResultCard` | Collapsible verse/interlinear, bookmarks, word lookup, expandable cross-references |
+| `ChapterView` | NASB/originals fetched in parallel; overlay or embedded Browse; highlighted verse and chapter navigation |
+| `CrossRefList` | All references in 240px scroll region; lazy per-chapter NASB fetch; eight-word starting-verse preview; optional votes and personal notes |
+| `DefinitionSheet` | Brief lookup, BDB/LSJ/UBS selection, separate matches, meanings, expandable notes/citations |
+| `EnglishStrongsPopup` | Brief definitions containing an English word, optional highlighting, lemma search |
+| `GlossCard` | App finds first highlighted original token and fetches its brief entry by Strong's/lemma; open state persists |
+| `SettingsPanel` | Combined Greek, finite/unlimited hits, theme, four font sizes, credits navigation |
+| `SourceCredits` | Attribution/licenses, source links, UBS download; Escape returns to Settings |
+| Class components | Session list/import, reference capture/edit/export, backup reminder; advanced-editing placeholders remain disabled |
+
+Definition-sheet searches derive their source from the token's corpus; combined
+Greek settings still apply. Greek brief definitions collapse when study entries
+are available. Dictionary content is rendered as text, not injected HTML.
+
+## Validation
+
+Run `npm run build`, `npm run test:references`, and `npm run test:study`.
+These check bundling/TypeScript, reference parsing, and fixture-based study
+import/normalization/citations. Tests need no downloaded reference DB. Building
+the app does not rebuild its data. Browser checks cover Hebrew/Greek lookup,
+ambiguous identifiers, sources, references/citations, credits navigation/download,
+phone widths, and offline lookup after initialization.
+
+`npm run lint` reports existing repository issues. Dependency CI checks npm and
+pnpm installs, audits, and builds; lint is informational. Update both lockfiles
+and synchronized overrides when changing dependencies. See [SOURCES.md](SOURCES.md)
+for source versions and redistribution notices.

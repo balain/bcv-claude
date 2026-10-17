@@ -29,6 +29,7 @@ import urllib.request
 import zipfile
 from html.parser import HTMLParser
 from pathlib import Path
+from study_lexicons import load_study
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
@@ -603,6 +604,10 @@ def load_lex_brief(out: sqlite3.Connection) -> tuple[int, int]:
                 n_names += 1
                 continue
             e, d, u, lemma, translit, morph, gloss, meaning = cols[:8]
+            # Online Bible's abridged Hebrew BDB meanings carry a separate
+            # permission requirement. Use the explicitly licensed BDB below.
+            if lang == "Heb":
+                meaning = ""
             d_norm = d.replace(" =", "").strip()
             # collapse extra whitespace in complex dstrong values
             d_norm = d_norm.split()[0] if d_norm else d_norm
@@ -624,10 +629,15 @@ class LSJStripper(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.buf: list[str] = []
+        self.citations: list[str] = []
 
     def handle_starttag(self, tag, attrs):
         if tag in ("br", "level2", "level3"):
             self.buf.append(" ")
+        if tag == "a":
+            citation = dict(attrs).get("title")
+            if citation:
+                self.citations.append(WS_RE.sub(" ", citation).strip())
 
     def handle_endtag(self, tag):
         if tag in ("br", "level2", "level3"):
@@ -648,7 +658,7 @@ def lsj_to_json(html: str) -> tuple[str, str]:
     # Structured: split by <Level2> / <Level3> / <BR />
     # For v1 we store a simple structure: {"html": original, "plain": plain}.
     # Future: parse into {"senses": [...], "citations": [...]}.
-    obj = {"plain": plain}
+    obj = {"plain": plain, "citations": list(dict.fromkeys(plain_parser.citations))}
     return json.dumps(obj, ensure_ascii=False), plain
 
 
@@ -866,9 +876,11 @@ def _parse_ref_colon(ref: str) -> tuple[int, int, int, int | None] | None:
 # Build pipeline
 # ---------------------------------------------------------------------------
 def build_core() -> None:
-    if OUT_DB.exists():
-        OUT_DB.unlink()
-    conn = sqlite3.connect(OUT_DB)
+    # Publish only a completed build, preserving the working DB on import failures.
+    building_db = OUT_DB.with_suffix('.building.db')
+    if building_db.exists():
+        building_db.unlink()
+    conn = sqlite3.connect(building_db)
     conn.executescript("PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF;")
     conn.executescript(SCHEMA_CORE)
 
@@ -879,6 +891,14 @@ def build_core() -> None:
 
     # lex_brief MUST load before tokens so gloss enrichment has data to join against
     nl, nn = load_lex_brief(conn)
+    print("  study lexicons: ", load_study(conn, BOOKS, lsj_loader=load_lsj))
+    # Keep existing brief Hebrew lookups useful using the open BDB transcription.
+    for estrong, in conn.execute("SELECT DISTINCT estrong FROM lex_brief WHERE lang='Heb'").fetchall():
+        rows = conn.execute("SELECT e.senses FROM study_entries e JOIN study_strongs s ON s.entry_id=e.id WHERE e.source='bdb' AND s.strong=? ORDER BY e.id", (estrong,)).fetchall()
+        if rows:
+            meaning = "\n\n".join(dict.fromkeys(json.loads(row[0])[0]["definition"] for row in rows))
+            conn.execute("UPDATE lex_brief SET meaning=?,meaning_plain=? WHERE lang='Heb' AND estrong=?", (meaning, meaning, estrong))
+    conn.execute("PRAGMA user_version=2")
     print(f"  lex_brief:       {nl}")
     print(f"  lex_names:       {nn}")
     conn.commit()
@@ -906,11 +926,21 @@ def build_core() -> None:
     conn.commit()
     conn.execute("ANALYZE")
     conn.commit()
+    # A reusable download of the adapted UBS data, with its share-alike license.
+    ubs_sources = [dict(zip(("id", "revision", "attribution", "license", "url", "changes"), row))
+                   for row in conn.execute("SELECT * FROM study_sources WHERE id LIKE 'ubs-%'")]
+    ubs_entries = [dict(zip(("id", "source", "lang", "lemma", "lemma_key", "senses"), row))
+                   for row in conn.execute("SELECT * FROM study_entries WHERE source LIKE 'ubs-%'")]
+    for entry in ubs_entries:
+        entry["senses"] = json.loads(entry["senses"])
+        entry["strongs"] = [r[0] for r in conn.execute("SELECT strong FROM study_strongs WHERE entry_id=? ORDER BY strong", (entry["id"],))]
+    (DATA / "ubs-study.json").write_text(json.dumps({"license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/", "sources": ubs_sources, "entries": ubs_entries}, ensure_ascii=False), encoding="utf-8")
     conn.close()
     # VACUUM in a separate connection
-    c2 = sqlite3.connect(OUT_DB)
+    c2 = sqlite3.connect(building_db)
     c2.execute("VACUUM")
     c2.close()
+    building_db.replace(OUT_DB)
     print(f"  → {OUT_DB} ({OUT_DB.stat().st_size // (1024*1024)} MB)")
 
 

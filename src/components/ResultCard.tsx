@@ -3,6 +3,7 @@ import type { BibleResult, Lang, OriginalSection, WordToken } from '../types';
 import type { CrossRef } from '../lib/db';
 import { BOOK_BY_ABBR3 } from '../lib/books';
 import { WordChip } from './WordChip';
+import { CrossRefList } from './CrossRefList';
 
 interface Props {
   result: BibleResult;
@@ -26,8 +27,6 @@ const SECTION_LABEL: Record<string, string> = {
   LXX: 'Greek (LXX)',
   GNT: 'Greek (GNT)',
 };
-
-const MAX_CROSS_REFS_VISIBLE = 5;
 
 export function ResultCard({
   result, onWordTap, onEngWordClick, onRefClick, onBookmark, isBookmarked,
@@ -285,37 +284,7 @@ export function ResultCard({
 
               {crossRefsOpen && crossRefs && crossRefs.length > 0 && (
                 <div style={{ padding: '2px 10px 6px' }}>
-                  {crossRefs.slice(0, MAX_CROSS_REFS_VISIBLE).map((cr, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                      <span
-                        onClick={() => onCrossRefClick?.(cr.targetBookId, cr.targetChapter, cr.targetVerseStart)}
-                        style={{
-                          fontSize: 'var(--fs-meta)', color: accentColor, cursor: onCrossRefClick ? 'pointer' : 'default',
-                          fontFamily: 'DM Sans', fontWeight: 500, textDecoration: 'underline',
-                        }}
-                      >
-                        {cr.targetLabel}
-                      </span>
-                      {cr.sourceDataset === 'user' && (
-                        <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--indigo)', fontWeight: 600 }}>★</span>
-                      )}
-                      {cr.userNote && (
-                        <span style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-mid)', fontStyle: 'italic', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {cr.userNote}
-                        </span>
-                      )}
-                      {cr.votes != null && (
-                        <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--ink-light)', marginLeft: 'auto', flexShrink: 0 }}>
-                          {cr.votes}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                  {crossRefs.length > MAX_CROSS_REFS_VISIBLE && (
-                    <div style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-light)', paddingTop: 2 }}>
-                      +{crossRefs.length - MAX_CROSS_REFS_VISIBLE} more
-                    </div>
-                  )}
+                  <CrossRefList refs={crossRefs} accentColor={accentColor} onNavigate={onCrossRefClick} showVotes />
                 </div>
               )}
             </div>

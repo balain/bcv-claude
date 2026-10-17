@@ -95,6 +95,10 @@ class DBClient {
     return this.call({ type: 'lookup_lemma', lemma, lang });
   }
 
+  studyLookup(strong: string | null | undefined, lemma: string | null | undefined, lang: 'Heb' | 'Grk'): Promise<StudyEntry[]> {
+    return this.call({ type: 'study_lookup', strong, lemma, lang });
+  }
+
   searchDefinitions(word: string): Promise<LexEntry[]> {
     return this.call({ type: 'search_definitions', word });
   }
@@ -182,6 +186,22 @@ export interface LexEntry {
   morph: string | null;
   gloss: string | null;
   meaning: string | null;
+}
+
+export interface StudySense {
+  definition: string;
+  glosses: string[];
+  domains: string[];
+  references: string[];
+  note: string;
+  code: string;
+}
+
+export interface StudyEntry {
+  id: string;
+  source: 'bdb' | 'lsj' | 'ubs-greek' | 'ubs-hebrew';
+  lemma: string;
+  senses: StudySense[];
 }
 
 // Singleton — created once the module is imported

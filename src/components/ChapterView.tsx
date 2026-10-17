@@ -4,6 +4,7 @@ import type { ChapterVerse, ChapterVerseOriginals, CrossRef } from '../lib/db';
 import type { Lang, Source, WordToken } from '../types';
 import { BOOK_BY_ABBR3 } from '../lib/books';
 import { WordChip } from './WordChip';
+import { CrossRefList } from './CrossRefList';
 import { DefinitionSheet } from './DefinitionSheet';
 import { getCrossRefsBulk } from '../lib/crossRefs';
 
@@ -405,30 +406,7 @@ export function ChapterView({
               {/* Cross-refs inline panel */}
               {isCrExpanded && (
                 <div style={{ background: 'var(--parchment)', borderTop: '1px solid var(--border)', padding: '6px 10px 6px 40px' }}>
-                  {verseCrossRefs.slice(0, 10).map((cr, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                      <span
-                        onClick={() => onCrossRefClick?.(cr.targetBookId, cr.targetChapter, cr.targetVerseStart)}
-                        style={{
-                          fontSize: 'var(--fs-meta)', color: accentColor, fontFamily: 'DM Sans', fontWeight: 500,
-                          cursor: onCrossRefClick ? 'pointer' : 'default', textDecoration: 'underline',
-                        }}
-                      >
-                        {cr.targetLabel}
-                      </span>
-                      {cr.sourceDataset === 'user' && (
-                        <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--indigo)', fontWeight: 600 }}>★</span>
-                      )}
-                      {cr.userNote && (
-                        <span style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-mid)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                          {cr.userNote}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                  {verseCrossRefs.length > 10 && (
-                    <div style={{ fontSize: 'var(--fs-control)', color: 'var(--ink-light)' }}>+{verseCrossRefs.length - 10} more</div>
-                  )}
+                  <CrossRefList refs={verseCrossRefs} accentColor={accentColor} onNavigate={onCrossRefClick} />
                   {onAddCrossRef && (
                     <div style={{ marginTop: 4 }}>
                       {isAddingCr ? (

@@ -38,6 +38,7 @@ let db: any = null;
 let sqlite3Module: any = null;
 /** True once we've confirmed cross_refs table exists in the loaded DB. */
 let hasCrossRefs = false;
+let hasStudyLexicons = false;
 
 // ─── message helpers ─────────────────────────────────────────────────────────
 
@@ -45,7 +46,8 @@ function post(msg: object) { self.postMessage(msg); }
 
 // ─── DB loading ───────────────────────────────────────────────────────────────
 
-const DB_NAME = 'bcv.db';
+// A new cache key prevents earlier Hebrew definitions from surviving this upgrade.
+const DB_NAME = 'bcv-study-v1.db';
 const DB_URL = import.meta.env.BASE_URL + 'db/bcv.db';
 
 /** Minimum plausible DB size — rejects obviously corrupt/empty OPFS entries. */
@@ -150,6 +152,8 @@ async function writeOpfsCache(data: Uint8Array): Promise<boolean> {
     if (file.size !== data.byteLength) {
       throw new Error(`OPFS cache size mismatch: wrote ${file.size} of ${data.byteLength} bytes`);
     }
+    // Release the previous release's large cache only after its replacement is saved.
+    try { await root.removeEntry('bcv.db'); } catch { /* absent or in use */ }
     return true;
   } catch (e) {
     console.warn('OPFS cache write failed (DB will re-download on next visit):', e);
@@ -231,6 +235,7 @@ async function openDb(sqlite3: any, preloaded?: Uint8Array): Promise<any> {
       { returnValue: 'resultRows' }
     );
     hasCrossRefs = crRows.length > 0;
+    hasStudyLexicons = openedDb.exec("SELECT 1 FROM sqlite_master WHERE type='table' AND name='study_entries'", { returnValue: 'resultRows' }).length > 0;
     stage = 'validating verse data';
     const verseRows: any[][] = openedDb.exec(
       "SELECT count(*) FROM verses WHERE translation='NASB'",
@@ -402,7 +407,6 @@ const CROSS_REFS_SQL = `
   JOIN book_meta bm ON bm.id = cr.target_book_id
   WHERE cr.source_book_id = ?1 AND cr.source_chapter = ?2 AND cr.source_verse = ?3
   ORDER BY cr.votes DESC
-  LIMIT 50
 `;
 
 function rowToCrossRef(row: any[]) {
@@ -561,7 +565,23 @@ function execSearch(source: Source, query: string, combineGreek = true, maxHits:
 
 function rowToLex(row: any[]) {
   const [e, d, u, lang, lemma, translit, morph, gloss, meaning_plain] = row;
-  return { estrong: e, dstrong: d, ustrong: u, lang, lemma, translit, morph, gloss, meaning: meaning_plain };
+  return { estrong: e, dstrong: d, ustrong: u, lang, lemma, translit, morph, gloss, meaning: lang === 'Heb' && !hasStudyLexicons ? null : meaning_plain };
+}
+
+function execStudyLookup(strong: string | undefined, lemma: string | undefined, lang: 'Heb' | 'Grk') {
+  if (!db) throw new Error('DB not ready');
+  if (!hasStudyLexicons) throw new Error('Study sources are unavailable in this database. Refresh the database after installing the updated data.');
+  const normalizedLemma = (lemma ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+  const match = (strong ?? '').match(/^([HGA])0*(\d+)([a-zA-Z]*)$/i);
+  const normalizedStrong = match ? `${match[1].toUpperCase() === 'G' ? 'G' : 'H'}${match[2].padStart(4, '0')}${match[3]}` : '';
+  const select = 'SELECT DISTINCT e.id,e.source,e.lemma,e.senses FROM study_entries e';
+  const options = { returnValue: 'resultRows' };
+  const exact: any[][] = normalizedStrong ? db.exec(`${select} JOIN study_strongs s ON s.entry_id=e.id WHERE s.strong=?1 AND e.lang=?2 ORDER BY e.source,e.id`, { ...options, bind: [normalizedStrong, lang] }) : [];
+  const foundSources = new Set(exact.map((r) => r[1]));
+  // Prefer exact identifiers per source; lemma matching covers tokens with no Strong's.
+  const fallback: any[][] = normalizedLemma ? db.exec(`${select} WHERE e.lemma_key=?1 AND e.lang=?2 ORDER BY e.source,e.id`, { ...options, bind: [normalizedLemma, lang] }) : [];
+  return [...exact, ...fallback.filter((r) => !foundSources.has(r[1]))]
+    .map(([id, source, lemma, senses]) => ({ id, source, lemma, senses: JSON.parse(senses) }));
 }
 
 function execLookup(strong: string) {
@@ -696,6 +716,8 @@ self.addEventListener('message', (e: MessageEvent) => {
       post({ id: msg.id, ok: true, data: execLookup(msg.strong) });
     } else if (msg.type === 'lookup_lemma') {
       post({ id: msg.id, ok: true, data: execLookupLemma(msg.lemma, msg.lang) });
+    } else if (msg.type === 'study_lookup') {
+      post({ id: msg.id, ok: true, data: execStudyLookup(msg.strong, msg.lemma, msg.lang) });
     } else if (msg.type === 'search_definitions') {
       post({ id: msg.id, ok: true, data: execSearchDefinitions(msg.word) });
     } else if (msg.type === 'fetch_chapter') {

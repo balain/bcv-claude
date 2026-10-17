@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { SourceCredits } from './SourceCredits';
 import type { ThemePref } from '../lib/theme';
 import type { FontSizePref } from '../lib/useFontSize';
 import type { SearchSettings } from '../lib/searchSettings';
@@ -27,7 +29,10 @@ const FONT_SIZE_OPTIONS: { value: FontSizePref; label: string; icon: string }[] 
 ];
 
 export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSizePref, onFontSizeChange, searchSettings, onSearchSettingsChange }: Props) {
+  const [showCredits, setShowCredits] = useState(false);
+  const close = () => { setShowCredits(false); onClose(); };
   if (!open) return null;
+  if (showCredits) return <SourceCredits onBack={() => setShowCredits(false)} onClose={close} />;
 
   return (
     <div
@@ -41,7 +46,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
     >
       {/* Backdrop */}
       <div
-        onClick={onClose}
+        onClick={close}
         aria-hidden="true"
         style={{
           position: 'absolute',
@@ -93,7 +98,7 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
             Settings
           </span>
           <button
-            onClick={onClose}
+            onClick={close}
             aria-label="Close settings"
             style={{
               width: 30,
@@ -281,6 +286,11 @@ export function SettingsPanel({ open, onClose, themePref, onThemeChange, fontSiz
             })}
           </div>
         </div>
+        <section style={{ padding: '24px 20px 0', fontFamily: 'DM Sans' }}>
+          <button onClick={() => setShowCredits(true)} style={{ color: 'var(--indigo)', background: 'var(--surface-muted)', border: '1px solid var(--border)', padding: '12px 16px', borderRadius: 10, cursor: 'pointer', fontSize: 'var(--fs-body)', width: '100%', textAlign: 'left' }}>
+            Source material credits →
+          </button>
+        </section>
       </div>
     </div>
   );

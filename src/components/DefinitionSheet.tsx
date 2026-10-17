@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Lang, Source, WordToken } from '../types';
 import { dbClient } from '../lib/db';
-import type { LexEntry } from '../lib/db';
+import type { LexEntry, StudyEntry } from '../lib/db';
+import { STUDY_SOURCES } from '../lib/sourceCredits';
 
 interface Props {
   word: WordToken;
@@ -10,7 +11,11 @@ interface Props {
   onSearch: (query: string, source: Source) => void;
 }
 
-export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
+export function DefinitionSheet(props: Props) {
+  return <DefinitionSheetContent key={`${props.lang}:${props.word.strong}:${props.word.lemma}:${props.word.surface}`} {...props} />;
+}
+
+function DefinitionSheetContent({ word, lang, onClose, onSearch }: Props) {
   const isHeb = lang === 'Heb';
   const accentColor = isHeb ? 'var(--amber)' : 'var(--indigo)';
   // Derive the search source from the token's own corpus so LXX words search LXX,
@@ -21,6 +26,10 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
     word.corpus === 'LXX' ? 'LXX' :
     'GNT';
   const [lex, setLex] = useState<LexEntry | null>(null);
+  const [studyEntries, setStudyEntries] = useState<StudyEntry[]>([]);
+  const [studyLoading, setStudyLoading] = useState(true);
+  const [studyError, setStudyError] = useState('');
+  const [selectedSource, setSelectedSource] = useState('');
 
   const dragStart = useRef<number | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
@@ -37,26 +46,32 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
   // Prefer Strong's lookup (fast, unambiguous); fall back to lemma when Strong's is absent
   // (GNT tokens currently store no Strong's — lemma lookup covers that gap).
   useEffect(() => {
-    setLex(null);
     let cancelled = false;
     const lexLang = isHeb ? 'Heb' : 'Grk';
 
     (async () => {
-      let entry: typeof lex = null;
-      if (word.strong) {
-        entry = await dbClient.lookup(word.strong);
+      try {
+        let entry: LexEntry | null = null;
+        if (word.strong) entry = await dbClient.lookup(word.strong);
+        if (!entry && word.lemma) entry = await dbClient.lookupByLemma(word.lemma, lexLang);
+        if (!cancelled) setLex(entry);
+        const studies = await dbClient.studyLookup(word.strong ?? entry?.estrong, word.lemma ?? entry?.lemma, lexLang);
+        if (!cancelled) setStudyEntries(studies);
+      } catch (error) {
+        if (!cancelled) setStudyError(error instanceof Error ? error.message : 'Study sources could not load.');
+      } finally {
+        if (!cancelled) setStudyLoading(false);
       }
-      if (!entry && word.lemma) {
-        entry = await dbClient.lookupByLemma(word.lemma, lexLang);
-      }
-      if (!cancelled) setLex(entry);
     })();
 
     return () => { cancelled = true; };
   }, [word.strong, word.lemma, isHeb]);
 
-  const meaning = lex?.meaning ?? word.meaning ?? null;
+  const meaning = isHeb && studyEntries.some((entry) => entry.source === 'bdb') ? null : lex?.meaning ?? word.meaning ?? null;
   const gloss = lex?.gloss ?? word.gloss ?? null;
+  const sources = [...new Set(studyEntries.map((entry) => entry.source))];
+  const activeSource = sources.find((source) => source === selectedSource) ?? sources[0];
+  const activeEntries = studyEntries.filter((entry) => entry.source === activeSource);
 
   const rows: { label: string; value: string | null | undefined }[] = [
     { label: 'Lemma', value: word.lemma },
@@ -210,10 +225,59 @@ export function DefinitionSheet({ word, lang, onClose, onSearch }: Props) {
                 lineHeight: 1.5,
               }}
             >
-              {meaning}
+              <details open={!studyEntries.length}>
+                <summary style={{ fontSize: 'var(--fs-meta)', fontWeight: 600, cursor: 'pointer' }}>{isHeb ? 'BDB · Open Scriptures' : 'Brief Greek definition · STEP Bible'}</summary>
+                <p style={{ whiteSpace: 'pre-line', margin: '8px 0 0' }}>{meaning}</p>
+              </details>
             </div>
           )}
         </div>
+
+        <section aria-label="Study lexicons" style={{ padding: '16px 20px 0', fontFamily: 'DM Sans', color: 'var(--ink)', fontSize: 'var(--fs-def-row)' }}>
+          <h2 style={{ fontSize: 'var(--fs-control)', margin: '0 0 12px' }}>Study lexicons</h2>
+          {studyLoading && <p role="status">Loading study sources…</p>}
+          {studyError && <p role="status" style={{ color: 'var(--ink-mid)' }}>{studyError}</p>}
+          {!studyLoading && !studyError && !sources.length && <p>No study entry is available for this word.</p>}
+          <div role="group" aria-label="Lexicon source" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {sources.map((source) => (
+              <button key={source} onClick={() => setSelectedSource(source)} aria-pressed={activeSource === source}
+                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: activeSource === source ? 'var(--indigo-bg)' : 'var(--surface-muted)', color: activeSource === source ? 'var(--indigo)' : 'var(--ink)', cursor: 'pointer', fontSize: 'var(--fs-control)' }}>
+                {source === 'bdb' ? 'BDB' : source === 'lsj' ? 'LSJ' : 'UBS'}
+              </button>
+            ))}
+          </div>
+          {activeSource && (
+            <div style={{ marginTop: 12, lineHeight: 1.6 }}>
+              <a href={STUDY_SOURCES[activeSource].url} target="_blank" rel="noreferrer" style={{ color: 'var(--indigo)', fontSize: 'var(--fs-meta)' }}>{STUDY_SOURCES[activeSource].name} · {STUDY_SOURCES[activeSource].license}</a>
+              {activeEntries.length > 1 && <p style={{ color: 'var(--ink-mid)', fontSize: 'var(--fs-meta)' }}>This lookup matches several dictionary entries. Choose the meaning that fits the passage.</p>}
+              {activeEntries.map((entry, entryIndex) => (
+                <article key={entry.id}>
+                  <h3 style={{ fontFamily: 'serif', fontSize: 'var(--fs-def-lemma)', margin: '12px 0' }} dir={isHeb ? 'rtl' : 'ltr'}>{entry.lemma}</h3>
+                  {activeEntries.length > 1 && <div style={{ fontWeight: 600 }}>Entry {entryIndex + 1}{entry.senses[0]?.glosses.filter(Boolean).length ? ` · ${entry.senses[0].glosses.filter(Boolean).join(', ')}` : ''}</div>}
+                  {entry.senses.map((sense, index) => (
+                    <div key={`${sense.code}:${index}`} style={{ borderTop: '1px solid var(--border)', padding: '12px 0' }}>
+                      {entry.senses.length > 1 && <div style={{ fontWeight: 600 }}>Meaning {index + 1}{sense.glosses.length ? ` · ${sense.glosses.join(', ')}` : ''}</div>}
+                      <p style={{ whiteSpace: 'pre-line', margin: '6px 0', overflowWrap: 'anywhere' }}>{sense.definition}</p>
+                      {sense.domains.length > 0 && <p style={{ margin: '6px 0', color: 'var(--ink-mid)' }}>Semantic domain: {sense.domains.join(' · ')}</p>}
+                      {sense.note && (
+                        <details style={{ marginTop: 8 }}>
+                          <summary style={{ cursor: 'pointer', color: 'var(--indigo)' }}>Usage notes</summary>
+                          <p style={{ margin: '8px 0', whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>{sense.note}</p>
+                        </details>
+                      )}
+                      {sense.references.length > 0 && (
+                        <details style={{ marginTop: 8 }}>
+                          <summary style={{ cursor: 'pointer', color: 'var(--indigo)' }}>{entry.source === 'lsj' ? 'Literary references' : 'Scripture references'} ({sense.references.length})</summary>
+                          <p style={{ margin: '8px 0', color: 'var(--ink-mid)' }}>{sense.references.join('; ')}</p>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
 
         <div style={{ padding: '16px 20px 0' }}>
           {rows.map(
