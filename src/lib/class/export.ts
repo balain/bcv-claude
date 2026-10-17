@@ -1,3 +1,4 @@
+import { ensureWordStudiesSchema } from './schema.ts';
 // ============================================================================
 // export.ts — serialize a session and all its dependents to SessionExportV1.
 // ============================================================================
@@ -10,6 +11,7 @@ import {
 } from './dataAccess.ts';
 
 export function exportSession(db: DB, sessionId: number): SessionExportV1 {
+  ensureWordStudiesSchema(db);
   const session = getSession(db, sessionId);
   if (!session) {
     throw new Error(`session ${sessionId} not found`);

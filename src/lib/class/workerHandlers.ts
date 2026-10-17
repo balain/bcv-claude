@@ -1,3 +1,4 @@
+import { ensureWordStudiesSchema } from './schema.ts';
 import { validateSavedStudy } from '../wordStudy/storage';
 // ============================================================================
 // workerHandlers.ts — RPC dispatcher for class_* requests.
@@ -35,6 +36,10 @@ export async function handleClassRequest(
   db: DB,
   msg: ClassRequest
 ): Promise<unknown> {
+  // Repair older/partially upgraded installations before any saved-study query.
+  if (['class_word_studies', 'class_word_save', 'class_word_delete'].includes(msg.type)) {
+    ensureWordStudiesSchema(db);
+  }
   switch (msg.type) {
     // ---- Sessions ----
     case 'class_session_create':

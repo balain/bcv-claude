@@ -1,3 +1,4 @@
+import { ensureWordStudiesSchema } from './schema.ts';
 import { validateSavedStudy } from '../wordStudy/storage';
 // ============================================================================
 // import.ts — apply a SessionExportV1 to the local DB.
@@ -54,6 +55,7 @@ export function importSession(
   if (payload.kind !== 'class.session/v1') {
     throw new Error(`unsupported export kind: ${payload.kind}`);
   }
+  ensureWordStudiesSchema(db);
   const failOnConflict = options.mergePolicy === 'fail-on-conflict';
   const tally = empty();
 

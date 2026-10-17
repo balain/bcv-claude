@@ -34,6 +34,7 @@ declare const self: typeof globalThis & {
 };
 
 let dbFacade: DB | null = null;
+let initializationError: string | null = null;
 const queuedMessages: ClassRequest[] = [];
 
 function post(msg: object) {
@@ -57,6 +58,10 @@ async function processMessage(msg: ClassRequest): Promise<void> {
 self.addEventListener("message", (e: MessageEvent) => {
   const msg = e.data as ClassRequest | undefined;
   if (!msg || msg.db !== "class") return; // not for us
+  if (initializationError) {
+    post({ id: msg.id, ok: false, error: initializationError });
+    return;
+  }
   if (!dbFacade) {
     queuedMessages.push(msg);
     return;
@@ -106,8 +111,10 @@ self.addEventListener("message", (e: MessageEvent) => {
     }
 
     rawDb.exec("PRAGMA foreign_keys = ON");
-    dbFacade = adaptSqliteWasm(rawDb);
-    applySchema(dbFacade);
+    const initializedDb = adaptSqliteWasm(rawDb);
+    initializedDb.transaction(() => applySchema(initializedDb));
+    // Publish the database only after the full schema upgrade succeeds.
+    dbFacade = initializedDb;
 
     post({ type: "ready", storageMode });
 
@@ -117,6 +124,11 @@ self.addEventListener("message", (e: MessageEvent) => {
       processMessage(m);
     }
   } catch (err) {
-    post({ type: "error", message: String((err as Error)?.message ?? err) });
+    initializationError = 'Class database initialization failed: ' + String((err as Error)?.message ?? err);
+    post({ type: "error", message: initializationError });
+    while (queuedMessages.length > 0) {
+      const msg = queuedMessages.shift()!;
+      post({ id: msg.id, ok: false, error: initializationError });
+    }
   }
 })();

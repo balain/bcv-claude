@@ -37,6 +37,28 @@ test('attached studies round-trip through session export/import with local sessi
 });
 test('schema upgrade preserves existing Class data and validates imported studies',async()=>{
  const f=fixture();f.sql.exec("UPDATE _meta SET value='2' WHERE key='schema_version'");const session=await f.call('class_session_create',{title:'Keep me',taughtOn:'2026-10-16'});applySchema(f.db);
- assert.equal(f.db.get("SELECT value FROM _meta WHERE key='schema_version'").value,'3');assert.equal((await f.call('class_session_get',{sessionId:session.id})).title,'Keep me');
+ assert.equal(f.db.get("SELECT value FROM _meta WHERE key='schema_version'").value,'4');assert.equal((await f.call('class_session_get',{sessionId:session.id})).title,'Keep me');
  await assert.rejects(()=>f.call('class_word_save',{study:{...study,request:{...study.request,translation:'BAD'}}}),/Invalid saved/);f.sql.close();
+});
+
+test('missing word_studies table is repaired on the first request without losing Class data',async()=>{
+ const f=fixture();const session=await f.call('class_session_create',{title:'Existing class',taughtOn:'2026-10-17'});
+ f.sql.exec("DROP TABLE word_studies; UPDATE _meta SET value='3' WHERE key='schema_version'");
+ assert.deepEqual(await f.call('class_word_studies',{}),[]);
+ await f.call('class_word_save',{study:{...study,sessionId:session.id}});
+ assert.equal((await f.call('class_word_studies',{}))[0].notes,study.notes);
+ assert.equal((await f.call('class_session_get',{sessionId:session.id})).title,'Existing class');
+ applySchema(f.db);assert.equal(f.db.get("SELECT value FROM _meta WHERE key='schema_version'").value,'4');f.sql.close();
+});
+test('upgrading a version 2 database actually missing the table preserves session data',async()=>{
+ const f=fixture();const session=await f.call('class_session_create',{title:'Legacy class',taughtOn:'2026-10-17'});
+ f.sql.exec("DROP TABLE word_studies; UPDATE _meta SET value='2' WHERE key='schema_version'");
+ applySchema(f.db);applySchema(f.db);
+ assert.deepEqual(await f.call('class_word_studies',{}),[]);
+ assert.equal((await f.call('class_session_get',{sessionId:session.id})).title,'Legacy class');f.sql.close();
+});
+test('Class exports repair a missing feature table rather than failing',async()=>{
+ const f=fixture();const session=await f.call('class_session_create',{title:'Export class',taughtOn:'2026-10-17'});
+ f.sql.exec('DROP TABLE word_studies');
+ const payload=await f.call('class_export_session',{sessionId:session.id});assert.deepEqual(payload.wordStudies,[]);f.sql.close();
 });

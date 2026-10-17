@@ -270,6 +270,10 @@ are downloaded by this command. BDB root-section links retain their editorial
 provenance; shared glosses are labeled as lexical discovery. Verified
 translation-specific word alignments are not included in the installed datasets.
 
+The Class database upgrades automatically to schema 4. Missing Word Study tables
+are created without resetting existing sessions or notes. Do not clear browser
+site data to resolve a missing-table error.
+
 Saved studies have their own JSON backup/import controls. Studies attached to a
 Class session are also included in session exports. Standalone study imports
 clear Class attachments because numeric session IDs differ between devices.

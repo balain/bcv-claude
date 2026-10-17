@@ -5,7 +5,19 @@
 // Apply on init via `applySchema(db)`.
 // ============================================================================
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
+
+// Also usable as a non-destructive repair for databases missing this feature table.
+export const WORD_STUDIES_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS word_studies (
+  id TEXT PRIMARY KEY, title TEXT NOT NULL, payload TEXT NOT NULL,
+  session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+  updated_at TEXT NOT NULL
+);`.trim();
+
+export function ensureWordStudiesSchema(db: DBLike): void {
+  db.exec(WORD_STUDIES_SCHEMA_SQL);
+}
 
 export const SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;
@@ -16,15 +28,11 @@ CREATE TABLE IF NOT EXISTS _meta (
 );
 
 INSERT OR IGNORE INTO _meta(key, value) VALUES
-  ('schema_version', '3'),
+  ('schema_version', '4'),
   ('created_at',     strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   ('device_id',      lower(hex(randomblob(8))));
 
-CREATE TABLE IF NOT EXISTS word_studies (
-  id TEXT PRIMARY KEY, title TEXT NOT NULL, payload TEXT NOT NULL,
-  session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
-  updated_at TEXT NOT NULL
-);
+${WORD_STUDIES_SCHEMA_SQL}
 
 CREATE TABLE IF NOT EXISTS series (
   id            INTEGER PRIMARY KEY,
@@ -278,7 +286,10 @@ CREATE VIEW IF NOT EXISTS v_user_cross_refs AS SELECT * FROM user_cross_refs WHE
 // Migrations to run on schema version upgrades.
 // Key = target version; value = SQL to apply.
 const MIGRATIONS: Record<number, string> = {
-  3: "UPDATE _meta SET value = '3' WHERE key = 'schema_version';",
+  3: `${WORD_STUDIES_SCHEMA_SQL}
+UPDATE _meta SET value = '3' WHERE key = 'schema_version';`,
+  4: `${WORD_STUDIES_SCHEMA_SQL}
+UPDATE _meta SET value = '4' WHERE key = 'schema_version';`,
   2: `
     CREATE TABLE IF NOT EXISTS user_cross_refs (
       id                  INTEGER PRIMARY KEY,
