@@ -36,9 +36,10 @@ docs/
 
 .env
 
+scripts/__pycache__/
+tests/__pycache__/
+
 public/.htaccess
-<<<<<<< HEAD
 .gitattributes
-=======
->>>>>>> gh/main
+
 
