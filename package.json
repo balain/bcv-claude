@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:references": "node --test tests/referenceSearch.test.mjs",
+    "test:scripture": "node --test tests/scriptureLinks.test.mjs",
     "test:study": "python3 -m unittest discover -s tests -p '*_test.py'",
     "preview": "vite preview"
   },

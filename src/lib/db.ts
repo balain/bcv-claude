@@ -7,6 +7,7 @@ import type { StudyRequest, WordStudyData } from './wordStudy/types';
 import type { BibleResult, Source } from '../types';
 import { DEFAULT_SEARCH_SETTINGS, type SearchSettings } from './searchSettings';
 import { parseReferenceQuery } from './referenceSearch';
+import { BOOK_BY_ID } from './books';
 
 type WorkerReply =
   | { id: string; ok: true; data: any }
@@ -116,6 +117,26 @@ class DBClient {
     return this.call({ type: 'fetch_chapter_originals', abbr3, chapter, testament });
   }
 
+  private previewChapters = new Map<string, Promise<[ChapterFetchResult, ChapterVerseOriginals[]]>>();
+
+  /** NASB text plus original-language tokens for one verse; chapters are cached for repeated previews. */
+  async fetchVersePreview(bookId: number, chapter: number, verse: number): Promise<VersePreview | null> {
+    const book = BOOK_BY_ID.get(bookId);
+    if (!book) return null;
+    const key = `${book.abbr3}:${chapter}`;
+    let pending = this.previewChapters.get(key);
+    if (!pending) {
+      pending = Promise.all([this.fetchChapter(book.abbr3, chapter), this.fetchChapterOriginals(book.abbr3, chapter, book.testament)]);
+      pending.catch(() => this.previewChapters.delete(key));
+      this.previewChapters.set(key, pending);
+    }
+    const [text, originals] = await pending;
+    const english = text.verses.find((v) => v.verse === verse)?.text ?? null;
+    const sections = originals.find((v) => v.verse === verse)?.originals ?? [];
+    if (english === null && !sections.length) return null;
+    return { label: `${book.name} ${chapter}:${verse}`, english, originals: sections };
+  }
+
   /** Clear the OPFS cache and re-download the DB from the server. */
   async forceRefresh(): Promise<void> {
     this.setStatus('progress', 'Clearing cache…');
@@ -160,6 +181,12 @@ export interface ChapterVerseOriginals {
       form: string | null; corpus: 'WLC' | 'LXX' | 'GNT'; highlight: boolean;
     }[];
   }[];
+}
+
+export interface VersePreview {
+  label: string;
+  english: string | null;
+  originals: ChapterVerseOriginals['originals'];
 }
 
 export interface CrossRef {

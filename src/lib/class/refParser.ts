@@ -151,6 +151,12 @@ function normalizeBookToken(s: string): string {
   return t.replace(/[^a-z0-9]/g, '');
 }
 
+/** Resolve a single book token ("1 Sam", "Song of Solomon") to its bookId; null when unknown or ambiguous. */
+export function resolveBookAlias(token: string): number | null {
+  const ids = ALIAS_INDEX.get(normalizeBookToken(token));
+  return ids && ids.length === 1 ? ids[0]! : null;
+}
+
 // ----------------------------------------------------------------------------
 // Tokenizer
 // ----------------------------------------------------------------------------

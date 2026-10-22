@@ -30,6 +30,8 @@ import type { ThemePref } from "./lib/theme";
 import { useFontSize } from "./lib/useFontSize";
 import { readSearchSettings } from "./lib/searchSettings";
 import { parseReferenceQuery } from "./lib/referenceSearch";
+import { ScriptureLinkContext } from "./lib/scriptureLinkContext";
+import type { ScriptureRef } from "./lib/scriptureLinks";
 
 const ENG_SOURCES = new Set<Source>(["KJV", "ASV", "LEB", "NASB"]);
 
@@ -182,6 +184,12 @@ export default function App() {
       setChapterView({ abbr3: book.abbr3, bookName: book.name, chapter, highlightVerse: verse, testament: book.testament });
     }
   }, []);
+
+  // Scripture links inside lexicon material open the same overlay.
+  const handleScriptureLink = useCallback(({ bookId, chapter, verse }: ScriptureRef) => {
+    setSelectedWord(null);
+    handleClassRefOpen(bookId, chapter, verse);
+  }, [handleClassRefOpen]);
 
   // ─── Bookmarks ───────────────────────────────────────────────────────────
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => loadBookmarks());
@@ -444,6 +452,7 @@ export default function App() {
   const isLoading = dbStatus === "initializing" || dbStatus === "progress";
 
   return (
+    <ScriptureLinkContext.Provider value={handleScriptureLink}>
     <div className="device-frame">
       {/* App header */}
       <div className="app-header"
@@ -873,5 +882,6 @@ export default function App() {
         onSearchSettingsChange={setSearchSettings}
       />
     </div>
+    </ScriptureLinkContext.Provider>
   );
 }
