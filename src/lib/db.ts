@@ -8,6 +8,7 @@ import type { BibleResult, Source } from '../types';
 import { DEFAULT_SEARCH_SETTINGS, type SearchSettings } from './searchSettings';
 import { parseReferenceQuery } from './referenceSearch';
 import { BOOK_BY_ID } from './books';
+import type { CitationMap } from './scriptureLinks';
 
 type WorkerReply =
   | { id: string; ok: true; data: any }
@@ -117,6 +118,18 @@ class DBClient {
     return this.call({ type: 'fetch_chapter_originals', abbr3, chapter, testament });
   }
 
+  private citationMapPromise: Promise<CitationMap> | null = null;
+
+  /** Hebrew (BHS) → English verse numbers for lexicon citations; loaded once per session. */
+  citationMap(): Promise<CitationMap> {
+    this.citationMapPromise ??= this.call<[number, number, number, number | null, number | null, number | null][]>({ type: 'citation_map' })
+      .then((rows) => new Map(rows.map(([b, c, v, tb, tc, tv]) => [
+        `${b}:${c}:${v}`, tb === null ? null : { bookId: tb, chapter: tc!, verse: tv! },
+      ])));
+    this.citationMapPromise.catch(() => { this.citationMapPromise = null; });
+    return this.citationMapPromise;
+  }
+
   private previewChapters = new Map<string, Promise<[ChapterFetchResult, ChapterVerseOriginals[]]>>();
 
   /** NASB text plus original-language tokens for one verse; chapters are cached for repeated previews. */
@@ -175,6 +188,8 @@ export interface ChapterVerseOriginals {
   originals: {
     corpus: 'WLC' | 'LXX' | 'GNT';
     lang: 'Heb' | 'Grk';
+    /** The edition's own verse label when it differs from the English verse (e.g. LXX "22:1"). */
+    sourceRef?: string;
     tokens: {
       surface: string; translit: string; gloss: string;
       root: string | null; lemma: string | null; strong: string | null;

@@ -51,13 +51,14 @@ not the large DB or UBS JSON. External links and the credits download need netwo
 ## Reference schema
 
 Definitions live in `scripts/build_db.py` and `scripts/study_lexicons.py`.
-The main DB currently has `PRAGMA user_version=2`.
+The main DB currently has `PRAGMA user_version=3`.
 
 | Table | Fields / key | Notes |
 |---|---|---|
 | `book_meta` | `id`, `abbr3`, `osis`, `name`, `testament`, `chapters` | Canonical IDs 1–66; agrees with `src/lib/books.ts` |
 | `verses` | Book/chapter/verse/translation key; `text` | English texts plus Hebrew/GNT transliteration rows |
-| `tokens` | `id`, book/chapter/verse, `word_num`, `corpus`, `surface`, `translit`, `gloss`, `lemma`, `strong`, `morph` | Corpora WLC, LXX, GNT |
+| `tokens` | `id`, book/chapter/verse, `word_num`, `corpus`, `surface`, `translit`, `gloss`, `lemma`, `strong`, `morph`, `src_chapter`, `src_verse`, `src_part` | Corpora WLC, LXX, GNT. Book/chapter/verse use English (NASB) numbering for every corpus; `src_*` keeps the LXX/GNT edition's own numbering |
+| `versification_map` | Key `tradition`, `src_book_id`, `src_chapter`, `src_verse`; English `book_id`/`chapter`/`verse` (NULL = no English counterpart), `how` | Only verses whose number changes. `Heb` maps Hebrew-numbered lexicon citations; `LXX` and `GNT` record token placement. See [docs/versification-map.md](docs/versification-map.md) |
 | `lex_brief` | Composite key `dstrong`, `lang`; `estrong`, `ustrong`, `lemma`, `translit`, `morph`, `gloss`, `meaning`, `meaning_plain` | STEP brief entries; restricted Hebrew meanings replaced with matching Open Scriptures BDB text |
 | `lex_names` | `key`, `dstrong`, `lang`, `description`, `refs` | Optional name sections from STEP input |
 | `cross_refs` | Source/target book/chapter/verse, optional target end, `votes`, `source_dataset` | Indexed by source and target; duplicate source/target/dataset rows excluded |
@@ -67,7 +68,8 @@ The main DB currently has `PRAGMA user_version=2`.
 
 FTS5 external-content tables `verses_fts` and `tokens_fts` mirror searchable
 verse/token fields with `unicode61 remove_diacritics 2`. Current token counts
-are approximately WLC 305,572; LXX 507,306; GNT 137,554.
+are approximately WLC 305,572; LXX 504,709; GNT 137,554. LXX material with no
+English counterpart (Greek Daniel additions, Ps 151, the Lamentations prologue) is not loaded.
 
 Current study counts: BDB 10,175; LSJ 11,033; UBS Greek 5,478; UBS Hebrew 7,875.
 Counts depend on supplied files and versions. BDB transcription and UBS Hebrew
@@ -114,9 +116,13 @@ It does not download Bible texts or STEP TSVs.
 3. `load_study`: BDB XML/index/augmented IDs, UBS JSON, and LSJ through the STEP
    parser. Missing required files fail the build.
 4. Populate brief Hebrew definitions from matching BDB entries, retaining all
-   matching definitions rather than selecting one homonym. Set user version 2.
+   matching definitions rather than selecting one homonym. Set user version 3.
 5. Load NASB, KJV, ASV, LEB, Hebrew/GNT verse rows and WLC/GNT/LXX tokens;
-   Greek enrichment uses exact and normalized lemma matching.
+   Greek enrichment uses exact and normalized lemma matching. Versification
+   (`scripts/versification.py`, STEP TVTMS) places LXX and GNT tokens at English
+   verses and fills `versification_map`; WLC is already English-numbered. The build
+   fails if any LXX/GNT token lands outside a NASB verse or an alignment spot check
+   breaks. MACULA's Hebrew-numbered references are mapped the same way.
 6. Import OpenBible references from cache or download. Download failure warns
    and leaves these references empty. Optional `data/josephilipraja/` inputs
    have separate GPL-2.0 terms and are not downloaded by default.
@@ -145,7 +151,8 @@ Requests carry string `id`, `type`, and the following payload. Replies use
 | `study_lookup` | Optional `strong`, optional `lemma`, `lang` |
 | `search_definitions` | English `word` |
 | `fetch_chapter` | `abbr3`, `chapter`, `translation` (client uses NASB) |
-| `fetch_chapter_originals` | `abbr3`, `chapter`, `testament` |
+| `fetch_chapter_originals` | `abbr3`, `chapter`, `testament`; each section has optional `sourceRef` (edition numbering when it differs) |
+| `citation_map` | None; Hebrew → English rows from `versification_map` for lexicon citation links |
 | `fetch_cross_refs` | `bookId`, `chapter`, `verse` |
 | `fetch_cross_refs_bulk` | `verses` array with book/chapter/verse |
 | `force_refresh` | None; asynchronously replace Bible cache, then client reloads |
@@ -189,8 +196,9 @@ study-lookup error and suppress their earlier Hebrew brief meanings.
 
 ## Cache and offline use
 
-Network URL: `<BASE_URL>db/bcv.db`. OPFS cache name: `bcv-study-v1.db`, forcing a
-one-time replacement of the older `bcv.db` cache. Reads reject entries below
+Network URL: `<BASE_URL>db/bcv.db`. OPFS cache name: `bcv-versification-v1.db`,
+forcing a one-time replacement of earlier caches (`bcv.db`,
+`bcv-word-study-macula-v1.db`), which are deleted once the new copy is saved. Reads reject entries below
 10 MB or with invalid SQLite header/page-size checks. Writes use synchronous
 access handles in 4 MB chunks, truncate/flush, and verify length; the old cache
 is removed only after its replacement is saved. Cache failure falls back to
@@ -226,7 +234,7 @@ are available. Dictionary content is rendered as text, not injected HTML.
 
 ## Validation
 
-Run `npm run build`, `npm run test:references`, and `npm run test:study`.
+Run `npm run build`, `npm run test:references`, `npm run test:scripture`, and `npm run test:study`.
 These check bundling/TypeScript, reference parsing, and fixture-based study
 import/normalization/citations. Tests need no downloaded reference DB. Building
 the app does not rebuild its data. Browser checks cover Hebrew/Greek lookup,

@@ -31,6 +31,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from study_lexicons import load_study
 from macula_equivalents import load_macula
+import versification as V
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
@@ -216,7 +217,11 @@ CREATE TABLE tokens (
   gloss TEXT,
   lemma TEXT,
   strong TEXT,
-  morph TEXT
+  morph TEXT,
+  -- Source-edition numbering when the corpus numbers differently (LXX, GNT); book_id/chapter/verse are English.
+  src_chapter INTEGER,
+  src_verse INTEGER,
+  src_part TEXT
 );
 CREATE INDEX idx_tokens_bcv ON tokens(corpus, book_id, chapter, verse, word_num);
 CREATE INDEX idx_tokens_strong ON tokens(strong);
@@ -505,7 +510,81 @@ def _lex_lookup(
     return val or (None, None, None)
 
 
-def load_tokens_gnt(out: sqlite3.Connection) -> int:
+# ---------------------------------------------------------------------------
+# Versification (STEP TVTMS): every corpus is stored in English (NASB) numbering
+# ---------------------------------------------------------------------------
+class Versification:
+    """TVTMS rows plus the NASB verse list and wording they are resolved against."""
+
+    def __init__(self, out: sqlite3.Connection):
+        self.rows = V.load_rows()
+        nasb = V.Inventory()
+        self.english_words: dict[V.Verse, frozenset[str]] = {}
+        for b, c, v, text in out.execute("SELECT book_id, chapter, verse, text FROM verses WHERE translation='NASB'"):
+            nasb.add(b, c, v, len(text.split()))
+            self.english_words[(b, c, v)] = V.content_words(text)
+        self.standard_to_nasb = V.standard_to_english(self.rows, nasb)
+        self.hebrew = V.Mapper(V.tradition_map(self.rows, "Hebrew"), self.standard_to_nasb)
+
+    def hebrew_to_english(self, book: int, chapter: int, verse: int) -> V.Verse | None:
+        target = self.hebrew.map(V.Ref(book, chapter, verse))
+        return None if target is None else (target.book, target.chapter, target.verse)
+
+
+def load_hebrew_citation_map(out: sqlite3.Connection, vx: Versification) -> int:
+    """Hebrew (BHS) → English for lexicon citations; WLC tokens are already English-numbered."""
+    batch = []
+    for src in vx.hebrew.to_standard:
+        if src.part:
+            continue
+        target = vx.hebrew_to_english(src.book, src.chapter, src.verse)
+        if target != (src.book, src.chapter, src.verse):
+            batch.append(("Heb", src.book, src.chapter, src.verse, *(target or (None, None, None)), "tvtms" if target else "none"))
+    out.executemany("INSERT OR IGNORE INTO versification_map VALUES(?,?,?,?,?,?,?,?)", batch)
+    return len(batch)
+
+
+# (book, chapter, verse, part, word_num, surface, translit, gloss, lemma, strong, morph) in source numbering
+SourceToken = tuple[int, int, int, str, int, str, str | None, str | None, str | None, str | None, str | None]
+
+
+def _place_tokens(out: sqlite3.Connection, vx: Versification, corpus: str, tokens: list[SourceToken],
+                  overrides: dict[V.Verse, V.Verse | None]) -> dict[str, int]:
+    """Insert tokens at their English verse, keeping source numbering in src_*; word_num follows source order."""
+    inv = V.Inventory()
+    glosses: dict[V.Verse, list[str]] = {}
+    for b, c, v, part, *_rest in tokens:
+        inv.add(b, c, v, 1, ord(part) - 96 if part else 0)
+    for t in tokens:
+        glosses.setdefault(t[:3], []).append(t[7] or "")
+    source_words = {k: V.content_words(" ".join(g)) for k, g in glosses.items()}
+    placed = V.place_edition(vx.rows, inv, vx.standard_to_nasb, set(vx.english_words),
+                             V.window_scorer(source_words, vx.english_words), overrides)
+
+    batch = []
+    per_target: dict[V.Verse, int] = {}
+    report = {"tokens": 0, "dropped_tokens": 0}
+    for t in sorted(tokens, key=lambda t: (placed[t[:3]].target or (0, 0, 0), t[1], t[2], t[3], t[4])):
+        target = placed[t[:3]].target
+        if target is None:
+            report["dropped_tokens"] += 1
+            continue
+        per_target[target] = per_target.get(target, 0) + 1
+        batch.append((*target, per_target[target], corpus, *t[5:], t[1], t[2], t[3] or None))
+    out.executemany(
+        "INSERT INTO tokens(book_id,chapter,verse,word_num,corpus,surface,translit,gloss,lemma,strong,morph,src_chapter,src_verse,src_part) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        batch,
+    )
+    report["tokens"] = len(batch)
+    moved = [(corpus, *verse, *(p.target or (None, None, None)), p.how) for verse, p in placed.items() if p.target != verse]
+    out.executemany("INSERT INTO versification_map VALUES(?,?,?,?,?,?,?,?)", moved)
+    for p in placed.values():
+        report[f"verses_{p.how}"] = report.get(f"verses_{p.how}", 0) + 1
+    return report
+
+
+def load_tokens_gnt(out: sqlite3.Connection, vx: Versification) -> dict[str, int]:
     src = sqlite3.connect(f"file:{SRC_DB}?mode=ro", uri=True)
     rows = src.execute(
         "SELECT BookName, Chapter, Verse, WordNum, WordA, WordB, Lemma, Morph FROM morph"
@@ -514,54 +593,61 @@ def load_tokens_gnt(out: sqlite3.Connection) -> int:
 
     lex_grk = _build_lex_grk(out)
 
-    batch = []
+    tokens: list[SourceToken] = []
     for bookname, ch, vs, wn, wa, wb, lemma, morph in rows:
         bid = resolve_book(bookname)
         if bid is None:
             continue
         gloss, translit, strong = _lex_lookup(lex_grk, lemma)
-        batch.append(
-            (bid, ch, vs, wn, "GNT", wa, translit, gloss, lemma, strong, morph)
-        )
-    out.executemany(
-        "INSERT INTO tokens(book_id,chapter,verse,word_num,corpus,surface,translit,gloss,lemma,strong,morph) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-        batch,
-    )
-    return len(batch)
+        tokens.append((bid, ch, vs, "", wn, wa, translit, gloss, lemma, strong, morph))
+    return _place_tokens(out, vx, "GNT", tokens, {})
 
 
 # LXX book numbers 1-39 map directly to canonical OT books by position.
 # Books ≥ 70 are deuterocanonical (Tobit, Judith, etc.) — skipped for now.
-# Psalms = 19 (151 chapters in LXX; chapter 151 is excluded by chapter count check).
 _LXX_BOOK_ID = {i: i for i in range(1, 40)}  # lxx.book → canonical book_id
 
 
-def load_tokens_lxx(out: sqlite3.Connection) -> int:
+def load_tokens_lxx(out: sqlite3.Connection, vx: Versification) -> dict[str, int]:
+    """CATSS verses are Rahlfs-numbered with sub-verses ("2a"); they are placed at English verses."""
     src = sqlite3.connect(f"file:{SRC_DB}?mode=ro", uri=True)
     rows = src.execute(
-        "SELECT book, chapter, CAST(verse AS INTEGER), wordnum, word, lemma, morph "
+        "SELECT book, chapter, verse, wordnum, word, lemma, morph "
         "FROM lxx WHERE book BETWEEN 1 AND 39"
     ).fetchall()
     src.close()
 
     lex_grk = _build_lex_grk(out)
 
-    batch = []
+    tokens: list[SourceToken] = []
     for lxx_book, ch, vs, wn, word, lemma, morph in rows:
         bid = _LXX_BOOK_ID.get(lxx_book)
-        if bid is None:
+        # A few CATSS verses are joined ("27/28", "26-28"); they are filed under the first.
+        m = re.match(r"(\d+)([a-z]?)", str(vs))
+        if bid is None or not m:
             continue
         gloss, translit, strong = _lex_lookup(lex_grk, lemma)
-        batch.append(
-            (bid, ch, vs, wn, "LXX", word, translit, gloss, lemma, strong, morph)
-        )
-    out.executemany(
-        "INSERT OR IGNORE INTO tokens(book_id,chapter,verse,word_num,corpus,surface,translit,gloss,lemma,strong,morph) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-        batch,
-    )
-    return len(batch)
+        tokens.append((bid, ch, int(m.group(1)), m.group(2), wn, word, translit, gloss, lemma, strong, morph))
+    return _place_tokens(out, vx, "LXX", tokens, V.CATSS_OVERRIDES)
+
+
+def validate_versification(out: sqlite3.Connection) -> None:
+    """Fail the build when a corpus lands outside the English verse list or a known alignment breaks."""
+    orphans = dict(out.execute(
+        "SELECT corpus, count(*) FROM tokens t WHERE NOT EXISTS (SELECT 1 FROM verses v WHERE v.translation='NASB' "
+        "AND v.book_id=t.book_id AND v.chapter=t.chapter AND v.verse=t.verse) GROUP BY corpus"
+    ).fetchall())
+    print(f"  tokens outside NASB verses: {orphans or 'none'}")
+    checks = [  # (corpus, book, chapter, verse, expected word) in English numbering
+        ("LXX", 19, 23, 1, "ποιμαίνει"), ("LXX", 39, 4, 5, "Ηλιαν"), ("LXX", 39, 4, 4, "Μωυσῆ"),
+        ("LXX", 29, 2, 28, "ἐκχεῶ"), ("LXX", 24, 25, 15, "ποτήριον"), ("LXX", 19, 51, 10, "καρδίαν"),
+        ("LXX", 20, 25, 1, "παιδεῖαι"), ("LXX", 24, 49, 20, "βουλὴν"),
+    ]
+    failed = [c for c in checks if not out.execute(
+        "SELECT 1 FROM tokens WHERE corpus=? AND book_id=? AND chapter=? AND verse=? AND surface=?", c).fetchone()]
+    print(f"  alignment spot checks: {len(checks) - len(failed)}/{len(checks)} passed")
+    if orphans.get("LXX") or orphans.get("GNT") or failed:
+        raise RuntimeError(f"Versification check failed: orphans={orphans} spot checks failed={failed}")
 
 
 # ---------------------------------------------------------------------------
@@ -883,7 +969,7 @@ def build_core() -> None:
         building_db.unlink()
     conn = sqlite3.connect(building_db)
     conn.executescript("PRAGMA journal_mode=MEMORY; PRAGMA synchronous=OFF;")
-    conn.executescript(SCHEMA_CORE)
+    conn.executescript(SCHEMA_CORE + V.SCHEMA)
 
     conn.executemany(
         "INSERT INTO book_meta(id,abbr3,osis,name,testament,chapters) VALUES(?,?,?,?,?,?)",
@@ -899,7 +985,7 @@ def build_core() -> None:
         if rows:
             meaning = "\n\n".join(dict.fromkeys(json.loads(row[0])[0]["definition"] for row in rows))
             conn.execute("UPDATE lex_brief SET meaning=?,meaning_plain=? WHERE lang='Heb' AND estrong=?", (meaning, meaning, estrong))
-    conn.execute("PRAGMA user_version=2")
+    conn.execute("PRAGMA user_version=3")
     print(f"  lex_brief:       {nl}")
     print(f"  lex_names:       {nn}")
     conn.commit()
@@ -910,14 +996,18 @@ def build_core() -> None:
     print("  leb verses:     ", load_leb(conn))
     print("  heb verses:     ", load_heb_verses(conn))
     print("  gnt verses:     ", load_gnt_verses(conn))
+    vx = Versification(conn)
+    print("  versification:   standard→NASB differences", len(vx.standard_to_nasb))
+    print("  hebrew citation map:", load_hebrew_citation_map(conn, vx))
     print("  heb tokens:     ", load_tokens_heb(conn))
-    print("  gnt tokens:     ", load_tokens_gnt(conn))
-    print("  lxx tokens:     ", load_tokens_lxx(conn))
+    print("  gnt tokens:     ", load_tokens_gnt(conn, vx))
+    print("  lxx tokens:     ", load_tokens_lxx(conn, vx))
+    validate_versification(conn)
 
     conn.commit()
     macula_path = DATA / 'macula' / 'annotations.xml'
     if macula_path.exists():
-        print('  MACULA equivalents:', load_macula(conn, macula_path)['counts'])
+        print('  MACULA equivalents:', load_macula(conn, macula_path, to_english=vx.hebrew_to_english)['counts'])
     else:
         print('  MACULA equivalents: optional source not installed; run scripts/macula_equivalents.py --download')
     n_cr, sk_cr = load_openbible_cross_refs(conn)

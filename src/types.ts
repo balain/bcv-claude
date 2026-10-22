@@ -18,6 +18,8 @@ export interface WordToken {
 export interface OriginalSection {
   corpus: 'WLC' | 'GNT' | 'LXX';
   lang: Lang;
+  /** The edition's own verse label when it differs from the English verse (e.g. LXX "22:1"). */
+  sourceRef?: string;
   tokens: WordToken[];
 }
 

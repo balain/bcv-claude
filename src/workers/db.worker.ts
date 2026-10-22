@@ -47,8 +47,10 @@ function post(msg: object) { self.postMessage(msg); }
 
 // ─── DB loading ───────────────────────────────────────────────────────────────
 
-// A new cache key prevents earlier Hebrew definitions from surviving this upgrade.
-const DB_NAME = 'bcv-word-study-macula-v1.db';
+// A new cache key makes clients fetch the rebuilt DB (versification-mapped tokens).
+const DB_NAME = 'bcv-versification-v1.db';
+/** Earlier cache keys, deleted once the replacement is saved. */
+const PREVIOUS_DB_NAMES = ['bcv.db', 'bcv-word-study-macula-v1.db'];
 const DB_URL = import.meta.env.BASE_URL + 'db/bcv.db';
 
 /** Minimum plausible DB size — rejects obviously corrupt/empty OPFS entries. */
@@ -154,7 +156,9 @@ async function writeOpfsCache(data: Uint8Array): Promise<boolean> {
       throw new Error(`OPFS cache size mismatch: wrote ${file.size} of ${data.byteLength} bytes`);
     }
     // Release the previous release's large cache only after its replacement is saved.
-    try { await root.removeEntry('bcv.db'); } catch { /* absent or in use */ }
+    for (const name of PREVIOUS_DB_NAMES) {
+      try { await root.removeEntry(name); } catch { /* absent or in use */ }
+    }
     return true;
   } catch (e) {
     console.warn('OPFS cache write failed (DB will re-download on next visit):', e);
@@ -271,7 +275,8 @@ const VERSE_SQL_ENG = `
     LIMIT ?4
   )
   SELECT h.abbr3, h.book_name, h.testament, h.chapter, h.verse, h.text,
-         t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus
+         t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus,
+         t.src_chapter, t.src_verse
   FROM hits h
   LEFT JOIN tokens t
     ON t.book_id = (SELECT id FROM book_meta WHERE abbr3 = h.abbr3)
@@ -296,7 +301,8 @@ const VERSE_SQL_TOKEN = `
   )
   SELECT b.abbr3, b.name AS book_name, b.testament, hv.chapter, hv.verse,
          COALESCE(v.text, '') AS text,
-         t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus
+         t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus,
+         t.src_chapter, t.src_verse
   FROM hit_verses hv
   JOIN book_meta b ON b.id = hv.book_id
   LEFT JOIN verses v ON v.book_id = hv.book_id AND v.chapter = hv.chapter
@@ -319,7 +325,8 @@ const VERSE_SQL_OT_DUAL = `
   )
   SELECT b.abbr3, b.name AS book_name, b.testament, hv.chapter, hv.verse,
          COALESCE(v.text, '') AS text,
-         t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus
+         t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus,
+         t.src_chapter, t.src_verse
   FROM hit_verses hv
   JOIN book_meta b ON b.id = hv.book_id
   LEFT JOIN verses v ON v.book_id = hv.book_id AND v.chapter = hv.chapter
@@ -386,7 +393,8 @@ const CHAPTER_SQL = `
 // Fetch all original-language tokens for a chapter.
 // ?1 = abbr3, ?2 = chapter, ?3 = testament ('OT'|'NT')
 const CHAPTER_ORIGINALS_SQL = `
-  SELECT t.verse, t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus
+  SELECT t.verse, t.word_num, t.surface, t.translit, t.gloss, t.lemma, t.strong, t.morph, t.corpus,
+         t.src_chapter, t.src_verse
   FROM tokens t
   WHERE t.book_id = (SELECT id FROM book_meta WHERE abbr3 = ?1)
     AND t.chapter = ?2
@@ -454,6 +462,20 @@ function ftsEscape(q: string): string {
 
 const CORPUS_LANG: Record<string, 'Heb' | 'Grk'> = { WLC: 'Heb', GNT: 'Grk', LXX: 'Grk' };
 
+/**
+ * The source edition's own verse label ("22:1", "3:1–2") when it differs from
+ * the English verse its tokens are filed under; undefined when they agree.
+ */
+function sourceRefLabel(refs: Iterable<string>, chapter: number, verse: number): string | undefined {
+  const unique = [...new Set(refs)].map((r) => r.split(':').map(Number))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (!unique.length || (unique.length === 1 && unique[0][0] === chapter && unique[0][1] === verse)) return undefined;
+  const [first, last] = [unique[0], unique[unique.length - 1]];
+  const consecutive = unique.every(([c, v], i) => c === first[0] && v === first[1] + i);
+  if (consecutive) return first[1] === last[1] ? `${first[0]}:${first[1]}` : `${first[0]}:${first[1]}–${last[1]}`;
+  return unique.map(([c, v]) => `${c}:${v}`).join(', ');
+}
+
 /** Strip diacritics (nikkud, Greek accents, etc.) for accent-insensitive comparison.
  *  Mirrors the Python ETL's _strip_diacritics() — NFD decompose then drop Mn category. */
 function stripDiacritics(s: string): string {
@@ -483,13 +505,14 @@ function groupRows(rows: any[][], q: string) {
     if (!map.has(key)) {
       map.set(key, { abbr3: row[0], book_name: row[1], testament: row[2],
         chapter: row[3], verse: row[4], text: row[5] ?? '',
-        tokensByCorpus: {} as Record<string, any[]> });
+        tokensByCorpus: {} as Record<string, any[]>, srcByCorpus: {} as Record<string, string[]> });
     }
     if (row[6] != null) {
       const corpus: string = row[13] ?? 'WLC';
       const entry = map.get(key)!;
       if (!entry.tokensByCorpus[corpus]) entry.tokensByCorpus[corpus] = [];
       entry.tokensByCorpus[corpus].push(makeToken(row, qLow, corpus));
+      if (row[14] != null) (entry.srcByCorpus[corpus] ??= []).push(`${row[14]}:${row[15]}`);
     }
   }
 
@@ -508,7 +531,10 @@ function toResults(verses: any[], query: string, source: Source) {
     // Build OriginalSection array in a stable order: WLC first, LXX second, GNT third.
     const originals = (['WLC', 'LXX', 'GNT'] as const)
       .filter((c) => (v.tokensByCorpus[c]?.length ?? 0) > 0)
-      .map((c) => ({ corpus: c, lang: CORPUS_LANG[c], tokens: v.tokensByCorpus[c] }));
+      .map((c) => ({
+        corpus: c, lang: CORPUS_LANG[c], tokens: v.tokensByCorpus[c],
+        sourceRef: sourceRefLabel(v.srcByCorpus[c] ?? [], v.chapter, v.verse),
+      }));
 
     return {
       ref: `${v.abbr3} ${v.chapter}:${v.verse}`,
@@ -642,6 +668,8 @@ function execFetchChapterOriginals(abbr3: string, chapter: number, testament: 'O
       .map((c) => ({
         corpus: c,
         lang: CORPUS_LANG[c],
+        sourceRef: sourceRefLabel(
+          corpusMap.get(c)!.filter((r) => r[9] != null).map((r) => `${r[9]}:${r[10]}`), chapter, verse),
         tokens: corpusMap.get(c)!.map((r) => ({
           surface: r[2] ?? '', translit: r[3] ?? '', gloss: r[4] ?? '',
           root: r[5] ?? null, lemma: r[5] ?? null, strong: r[6] ?? null,
@@ -650,6 +678,17 @@ function execFetchChapterOriginals(abbr3: string, chapter: number, testament: 'O
         })),
       })),
   }));
+}
+
+/** Hebrew-numbered citations (BDB, UBS) → English verse; only verses that differ, null = no English verse. */
+function execCitationMap(): [number, number, number, number | null, number | null, number | null][] {
+  if (!db) throw new Error('DB not ready');
+  const exists = db.exec("SELECT 1 FROM sqlite_master WHERE type='table' AND name='versification_map'", { returnValue: 'resultRows' }).length > 0;
+  if (!exists) return [];
+  return db.exec(
+    "SELECT src_book_id, src_chapter, src_verse, book_id, chapter, verse FROM versification_map WHERE tradition='Heb'",
+    { returnValue: 'resultRows' },
+  ) as [number, number, number, number | null, number | null, number | null][];
 }
 
 function execReferenceSearch(query: string) {
@@ -729,6 +768,8 @@ self.addEventListener('message', (e: MessageEvent) => {
       post({ id: msg.id, ok: true, data: execSearchDefinitions(msg.word) });
     } else if (msg.type === 'fetch_chapter') {
       post({ id: msg.id, ok: true, data: execFetchChapter(msg.abbr3, msg.chapter, msg.translation) });
+    } else if (msg.type === 'citation_map') {
+      post({ id: msg.id, ok: true, data: execCitationMap() });
     } else if (msg.type === 'fetch_chapter_originals') {
       post({ id: msg.id, ok: true, data: execFetchChapterOriginals(msg.abbr3, msg.chapter, msg.testament) });
     } else if (msg.type === 'fetch_cross_refs') {

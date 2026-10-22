@@ -6,7 +6,7 @@ import type { LexEntry, StudyEntry } from '../lib/db';
 import { STUDY_SOURCES } from '../lib/sourceCredits';
 import { ScriptureLinkContext } from '../lib/scriptureLinkContext';
 import { ScriptureText } from './ScriptureRefLink';
-import { studyDialect } from '../lib/scriptureLinks';
+import { studyDialect, usesHebrewNumbering } from '../lib/scriptureLinks';
 
 interface Props {
   word: WordToken;
@@ -236,7 +236,7 @@ function DefinitionSheetContent({ word, lang, onClose, onSearch }: Props) {
             >
               <details open={!studyEntries.length}>
                 <summary style={{ fontSize: 'var(--fs-meta)', fontWeight: 600, cursor: 'pointer' }}>{isHeb ? 'BDB · Open Scriptures' : 'Brief Greek definition · STEP Bible'}</summary>
-                <p style={{ whiteSpace: 'pre-line', margin: '8px 0 0' }}><ScriptureText text={meaning} dialect={isHeb ? 'bdb' : 'step'} /></p>
+                <p style={{ whiteSpace: 'pre-line', margin: '8px 0 0' }}><ScriptureText text={meaning} dialect={isHeb ? 'bdb' : 'step'} hebrewNumbering={isHeb} /></p>
               </details>
             </div>
           )}
@@ -266,12 +266,12 @@ function DefinitionSheetContent({ word, lang, onClose, onSearch }: Props) {
                   {entry.senses.map((sense, index) => (
                     <div key={`${sense.code}:${index}`} style={{ borderTop: '1px solid var(--border)', padding: '12px 0' }}>
                       {entry.senses.length > 1 && <div style={{ fontWeight: 600 }}>Meaning {index + 1}{sense.glosses.length ? ` · ${sense.glosses.join(', ')}` : ''}</div>}
-                      <p style={{ whiteSpace: 'pre-line', margin: '6px 0', overflowWrap: 'anywhere' }}><ScriptureText text={sense.definition} dialect={studyDialect(entry.source)} /></p>
+                      <p style={{ whiteSpace: 'pre-line', margin: '6px 0', overflowWrap: 'anywhere' }}><ScriptureText text={sense.definition} dialect={studyDialect(entry.source)} hebrewNumbering={usesHebrewNumbering(entry.source)} /></p>
                       {sense.domains.length > 0 && <p style={{ margin: '6px 0', color: 'var(--ink-mid)' }}>Semantic domain: {sense.domains.join(' · ')}</p>}
                       {sense.note && (
                         <details style={{ marginTop: 8 }}>
                           <summary style={{ cursor: 'pointer', color: 'var(--indigo)' }}>Usage notes</summary>
-                          <p style={{ margin: '8px 0', whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}><ScriptureText text={sense.note} dialect={studyDialect(entry.source)} /></p>
+                          <p style={{ margin: '8px 0', whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}><ScriptureText text={sense.note} dialect={studyDialect(entry.source)} hebrewNumbering={usesHebrewNumbering(entry.source)} /></p>
                         </details>
                       )}
                       {sense.references.length > 0 && (
@@ -279,7 +279,7 @@ function DefinitionSheetContent({ word, lang, onClose, onSearch }: Props) {
                           <summary style={{ cursor: 'pointer', color: 'var(--indigo)' }}>{entry.source === 'lsj' ? 'Literary references' : 'Scripture references'} ({sense.references.length})</summary>
                           <p style={{ margin: '8px 0', color: 'var(--ink-mid)' }}>
                             {entry.source === 'lsj' ? sense.references.join('; ') : sense.references.map((ref, i) => (
-                              <span key={i}>{i > 0 && '; '}<ScriptureText text={ref} dialect={studyDialect(entry.source)} /></span>
+                              <span key={i}>{i > 0 && '; '}<ScriptureText text={ref} dialect={studyDialect(entry.source)} hebrewNumbering={usesHebrewNumbering(entry.source)} /></span>
                             ))}
                           </p>
                         </details>

@@ -1,8 +1,40 @@
 # Versification mapping (STEP TVTMS) — implementation plan
 
-Status: plan, 2026-10-22. Combines the original TVTMS plan (from the removed
+Status: implemented 2026-10-22 (steps 1–7). Combines the original TVTMS plan (from the removed
 `worktree-versification-map` session) with the Scripture-link previews in
 lexicon material (`src/lib/scriptureLinks.ts`, `src/components/ScriptureRefLink.tsx`).
+
+## Decisions made in step 1 (as built)
+
+- **Source:** `Versification/TVTMS … CC BY.txt` at STEPBible-Data `ed476a8`, the Expanded table.
+  TVTMS's Standard is English (NRSV/KJV-based). NASB differs from it in three places
+  (Phil 1:16/17 order, 3 John 14/15), which the inverted NASB→Standard map handles.
+- **How rows are chosen:** an edition (CATSS LXX, Robinson–Pierpont GNT, NASB) is
+  evaluated against the Tests, and the first passing row wins. Filtering by SourceType alone
+  is wrong for CATSS, which has Hebrew chapter numbers in Malachi but Greek verse order.
+  Lexicon citations can't be tested, so they use the `Hebrew` rows directly.
+- **When tests fail** (CATSS splits a verse in Jer 25, so every "Jer.25:19=Last" test fails):
+  choose among identity and the targets TVTMS lists for that verse, scored by how well the LXX
+  glosses overlap the NASB wording over a five-verse window. Free search across a
+  book was tried and rejected, because it confuses parallel passages (Exod 26 vs 36) and
+  generic lines.
+- **Hand overrides** (`CATSS_OVERRIDES`): Prov 32–36 → 25–29; Mal 3:22–24 → 4:5, 4:6, 4:4;
+  CATSS Jer 30 → the MT 49 oracles; Lam 0:1 has no English verse. Each block is
+  checked by its content score against identity.
+- **Collisions:** a test- or identity-based placement that shares an English verse with a
+  content-backed one, and scores clearly lower, is dropped (6 verses in Exod 36–39).
+- **Citation numbering, checked against the data:** in BDB, the word an entry defines appears
+  at the Hebrew-mapped verse in 213 of 225 moved Psalm citations (2 at the raw verse), so
+  BDB and UBS use the `Heb` map. In STEP brief/LSJ, the word appears at the raw verse 96 times
+  vs 31 at the Hebrew-mapped one, so STEP citations are used as written.
+- **Results** (build of 2026-10-22):
+  - 0 LXX/GNT tokens fall outside NASB verses, and all 8 spot checks pass.
+  - LXX: 4,671 verses placed by TVTMS tests, 173 by override, 123 by content. 82 verses have
+    no English counterpart (Greek Daniel additions, Ps 151, Lam prologue, collisions).
+  - GNT: 2 Cor 13:13 → 13:14 and Rev 12:18 → 13:1.
+  - MACULA Hebrew: unmatched 31,461 → 12,893; validated 265,383 → 284,014. Greek corroborated
+    at the reference: 105,204 → 125,519.
+  - 1,973 Hebrew citation remaps. Duplicate LXX `word_num`s (the old `CAST` bug): 0.
 
 ## Problem
 

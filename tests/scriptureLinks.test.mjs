@@ -39,10 +39,28 @@ test('BDB abbreviations, numbered books and BDB-only meanings', () => {
     ['Jo 2:3=29:2:3', 'Ez 6:3=26:6:3', 'Ezr 1:1=15:1:1', 'Ju 5:31=7:5:31', '1 Ch 2:3=13:2:3']);
 });
 
-test('BDB Roman-numeral books and Hebrew chapter numbering', () => {
+test('BDB Roman-numeral books', () => {
   assert.deepEqual(links('asses I S 9:3, 20; II K 4:1 Is 4:5', 'bdb'), ['I S 9:3=9:9:3', 'II K 4:1=12:4:1', 'Is 4:5=23:4:5']);
-  assert.deepEqual(links('Jo 4:10 Mal 3:20', 'bdb'), ['Jo 4:10=29:3:10', 'Mal 3:20=39:4:2']);
-  assert.deepEqual(links('Joel 4:19', 'default'), ['Joel 4:19=29:3:19']);
+});
+
+test('Hebrew-numbered citations open the English verse and keep their own wording', () => {
+  const map = new Map([
+    ['29:4:10', { bookId: 29, chapter: 3, verse: 10 }],
+    ['39:3:20', { bookId: 39, chapter: 4, verse: 2 }],
+    ['19:51:12', { bookId: 19, chapter: 51, verse: 10 }],
+    ['23:9:1', { bookId: 23, chapter: 9, verse: 2 }],
+    ['17:4:62', null],
+  ]);
+  const mapped = (text, dialect) => linkifyScripture(text, dialect, map).filter((s) => s.ref)
+    .map((s) => `${s.text}=${s.ref.bookId}:${s.ref.chapter}:${s.ref.verse}${s.cited ? ` (cited ${s.cited.chapter}:${s.cited.verse})` : ''}`);
+  assert.deepEqual(mapped('Jo 4:10 Mal 3:20 ψ 51:12; 51:3', 'bdb'),
+    ['Jo 4:10=29:3:10 (cited 4:10)', 'Mal 3:20=39:4:2 (cited 3:20)', 'ψ 51:12=19:51:10 (cited 51:12)', '51:3=19:51:3']);
+  assert.deepEqual(mapped('Joel 4:19, Isaiah 9:1', 'default'), ['Isaiah 9:1=23:9:2 (cited 9:1)']);  // Joel 4:19 has no map entry
+  assert.deepEqual(mapped('Est 4:62', 'default'), []);  // no English counterpart
+  assert.deepEqual(mapped('02902900300000', 'default'), []);  // Joel has 3 English chapters; unmapped code stays plain
+  assert.deepEqual(mapped('02900401000000', 'default'), ['Joel 4:10=29:3:10 (cited 4:10)']);
+  // Without a map (STEP, English-numbered) the citation is used as written.
+  assert.deepEqual(links('Jo 4:10', 'bdb'), []);
 });
 
 test('BDB OSIS reference lists', () => {

@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS macula_equivalents (
  word_num INTEGER NOT NULL, hebrew_surface TEXT NOT NULL, hebrew_strong TEXT NOT NULL,
  greek_surface TEXT NOT NULL, greek_strong TEXT, greek_key TEXT NOT NULL,
  hebrew_token_id INTEGER, lxx_token_id INTEGER,
- hebrew_status TEXT NOT NULL, greek_status TEXT NOT NULL
+ hebrew_status TEXT NOT NULL, greek_status TEXT NOT NULL,
+ -- MACULA's own (Hebrew/BHS) numbering; book_id/chapter/verse are English.
+ src_chapter INTEGER, src_verse INTEGER
 );
 CREATE INDEX IF NOT EXISTS macula_hebrew ON macula_equivalents(hebrew_strong,book_id,chapter,verse);
 CREATE INDEX IF NOT EXISTS macula_greek ON macula_equivalents(greek_strong,book_id,chapter,verse);
@@ -69,7 +71,8 @@ def annotations(path):
             yield dict(node.attrib)
         node.clear()
 
-def load_macula(conn, path, verify=True):
+def load_macula(conn, path, verify=True, to_english=None):
+    """`to_english(book, chapter, verse)` maps MACULA's Hebrew numbering to the token numbering (None = no English verse)."""
     if verify:
         for name in CHECKSUMS:
             file = path.parent / name
@@ -83,8 +86,13 @@ def load_macula(conn, path, verify=True):
         for ref, verse_nodes in itertools.groupby(annotations(path), lambda a: a.get('morphId', '')[:8]):
             if not re.fullmatch(r'\d{8}', ref):
                 raise ValueError('Invalid MACULA reference: ' + ref)
-            book, chapter, verse = int(ref[:2]), int(ref[2:5]), int(ref[5:8])
+            book, src_chapter, src_verse = int(ref[:2]), int(ref[2:5]), int(ref[5:8])
             nodes = list(verse_nodes)
+            target = to_english(book, src_chapter, src_verse) if to_english else (book, src_chapter, src_verse)
+            if target is None:
+                counts['no_english_verse'] += len(nodes)
+                continue
+            _, chapter, verse = target
             words = defaultdict(list)
             for a in nodes:
                 ident = a['morphId']
@@ -118,11 +126,11 @@ def load_macula(conn, path, verify=True):
                 gi = gc[0][0] if hi and len(gc) == 1 else None
                 gstatus = 'not_provided' if not gsurface else 'surface_and_identifier' if gi else 'ambiguous' if len(gc)>1 else 'unresolved'
                 counts[hstatus + '_hebrew'] += 1; counts[gstatus + '_greek'] += 1
-                pending.append((ident,book,chapter,verse,word_num,surface,hs,gsurface,gs,text_key(gsurface),hi,gi,hstatus,gstatus))
-            conn.executemany('INSERT INTO macula_equivalents VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)', pending)
+                pending.append((ident,book,chapter,verse,word_num,surface,hs,gsurface,gs,text_key(gsurface),hi,gi,hstatus,gstatus,src_chapter,src_verse))
+            conn.executemany('INSERT INTO macula_equivalents VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', pending)
         metadata = {'revision': REVISION, 'source_url': SOURCE_URL, 'license_url': LICENSE_URL,
                     'attribution': ATTRIBUTION, 'license': 'CC BY 4.0', 'counts': dict(counts),
-                    'changes': 'Extracted lexical Hebrew morphemes and recorded Greek equivalents; excluded private/suffixed grammatical identifiers; validated Hebrew surfaces and identifiers against installed tokens; checked Greek surface/identifier candidates at the stored reference without asserting cross-edition versification alignment.'}
+                    'changes': 'Extracted lexical Hebrew morphemes and recorded Greek equivalents; excluded private/suffixed grammatical identifiers; mapped Hebrew (BHS) verse numbers to English with STEP TVTMS, keeping the source numbers; validated Hebrew surfaces and identifiers against installed tokens; checked Greek surface/identifier candidates at the stored reference without asserting cross-edition versification alignment.'}
         conn.executemany('INSERT OR REPLACE INTO macula_metadata VALUES(?,?)', [(k,json.dumps(v) if isinstance(v,dict) else v) for k,v in metadata.items()])
         if conn.execute("SELECT 1 FROM sqlite_master WHERE name='study_sources'").fetchone():
             conn.execute('INSERT OR REPLACE INTO study_sources VALUES(?,?,?,?,?,?)', ('macula-lxx',REVISION,ATTRIBUTION,'CC BY 4.0','https://github.com/Clear-Bible/macula-hebrew',metadata['changes']))
@@ -143,7 +151,8 @@ def main():
         try:
             with sqlite3.connect(args.database) as src, sqlite3.connect(building) as out:
                 src.backup(out)
-                report = load_macula(out, args.sources/'annotations.xml')
+                from build_db import Versification  # deferred: build_db imports this module
+                report = load_macula(out, args.sources/'annotations.xml', to_english=Versification(out).hebrew_to_english)
             building.replace(args.database)
         finally:
             if building.exists(): building.unlink()

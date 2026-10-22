@@ -38,6 +38,14 @@ vocabulary, including NT and Septuagint words. TSV/HTML becomes SQLite/plain
 text; bibliographic anchor titles become literary references. STEP versions
 are supplied locally rather than automatically pinned by the downloader.
 
+TVTMS (*Translators Versification Traditions with Methodology for
+Standardisation*), pinned to revision `ed476a8ee6e3f7b3a46fc48af6c7dabc02387b1d`
+with its SHA-256 in `data/versification/manifest.json` by
+`scripts/versification.py --download`, maps Hebrew, Greek and English verse
+numbering. Its Expanded table is evaluated against the installed LXX, GNT and
+NASB. A few CATSS LXX numberings it does not describe are overridden by hand
+after checking verse content.
+
 TBESH supplies Hebrew lemmas, lexical tags, morphology summaries, and glosses.
 Its Online Bible abridged-BDB meanings request separate permission. The importer
 excludes these meanings and substitutes the Open Scriptures transcription.

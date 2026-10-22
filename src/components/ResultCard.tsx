@@ -83,13 +83,14 @@ export function ResultCard({
         padding: '4px 8px 2px',
       }}
     >
-      {hasBoth && (
+      {(hasBoth || section.sourceRef) && (
         <div style={{
           fontSize: 'var(--fs-badge)', fontWeight: 600, letterSpacing: '0.08em',
           color: 'var(--ink-light)', paddingLeft: 4, marginBottom: 2,
           textTransform: 'uppercase' as const,
         }}>
           {SECTION_LABEL[section.corpus]}
+          {section.sourceRef && <span style={{ fontWeight: 400 }}>{' · '}{section.sourceRef}</span>}
         </div>
       )}
       <div style={{

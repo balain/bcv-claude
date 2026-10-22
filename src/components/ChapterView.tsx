@@ -483,6 +483,11 @@ export function ChapterView({
                         fontFamily: 'DM Sans',
                       }}>
                         {corpusLabel}
+                        {section.sourceRef && (
+                          <span title={`Numbered ${section.sourceRef} in this edition`} style={{ fontWeight: 400, textTransform: 'none' as const }}>
+                            {' · '}{section.sourceRef}
+                          </span>
+                        )}
                       </span>
                       <span style={{ fontSize: 'var(--fs-badge)', color: 'var(--ink-light)' }}>
                         {isExpanded ? '▼' : '▶'}

@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import { dbClient } from '../lib/db';
 import type { VersePreview } from '../lib/db';
 import { linkifyScripture } from '../lib/scriptureLinks';
-import type { ScriptureDialect, ScriptureRef } from '../lib/scriptureLinks';
+import type { CitationMap, ScriptureDialect, ScriptureRef } from '../lib/scriptureLinks';
+import { BOOK_BY_ID } from '../lib/books';
 import { ScriptureLinkContext } from '../lib/scriptureLinkContext';
 
 const SECTION_LABEL: Record<string, string> = {
@@ -17,15 +18,40 @@ const HOVER_DELAY = 300;
 const LONG_PRESS = 450;
 const GUTTER = 16;
 
-/** Third-party lexicon text with its Scripture citations rendered as preview links. */
-export function ScriptureText({ text, dialect }: { text: string; dialect?: ScriptureDialect }) {
-  const segments = useMemo(() => linkifyScripture(text, dialect), [text, dialect]);
-  return <>{segments.map((s, i) => s.ref ? <ScriptureRefLink key={i} scriptureRef={s.ref}>{s.text}</ScriptureRefLink> : s.text)}</>;
+let loadedCitationMap: CitationMap | null = null;
+
+/** The Hebrew → English citation map, loaded once per session; null until it arrives. */
+function useCitationMap(enabled: boolean): CitationMap | null {
+  const [map, setMap] = useState<CitationMap | null>(loadedCitationMap);
+  useEffect(() => {
+    if (!enabled || map) return;
+    let live = true;
+    dbClient.citationMap().then(
+      (loaded) => { loadedCitationMap = loaded; if (live) setMap(loaded); },
+      () => { if (live) setMap(new Map()); },
+    );
+    return () => { live = false; };
+  }, [enabled, map]);
+  return map;
+}
+
+/**
+ * Third-party lexicon text with its Scripture citations rendered as preview links.
+ * Sources with `hebrewNumbering` stay plain text until the citation map loads, so a
+ * link never opens a Hebrew-numbered verse in the English text.
+ */
+export function ScriptureText({ text, dialect, hebrewNumbering = false }: { text: string; dialect?: ScriptureDialect; hebrewNumbering?: boolean }) {
+  const citations = useCitationMap(hebrewNumbering);
+  const segments = useMemo(
+    () => (hebrewNumbering && !citations ? [{ text }] : linkifyScripture(text, dialect, citations ?? undefined)),
+    [text, dialect, hebrewNumbering, citations],
+  );
+  return <>{segments.map((s, i) => s.ref ? <ScriptureRefLink key={i} scriptureRef={s.ref} cited={s.cited}>{s.text}</ScriptureRefLink> : s.text)}</>;
 }
 
 type PreviewState = { status: 'loading' } | { status: 'ready'; preview: VersePreview | null } | { status: 'error' };
 
-export function ScriptureRefLink({ scriptureRef, children }: { scriptureRef: ScriptureRef; children: ReactNode }) {
+export function ScriptureRefLink({ scriptureRef, cited, children }: { scriptureRef: ScriptureRef; cited?: ScriptureRef; children: ReactNode }) {
   const openPassage = useContext(ScriptureLinkContext);
   const tooltipId = useId();
   const anchor = useRef<HTMLAnchorElement>(null);
@@ -101,7 +127,7 @@ export function ScriptureRefLink({ scriptureRef, children }: { scriptureRef: Scr
           boxShadow: 'var(--shadow-lg)', padding: '12px 14px', fontFamily: 'DM Sans', fontSize: 'var(--fs-meta)',
           lineHeight: 1.5, animation: 'fadeIn 0.15s ease', pointerEvents: 'none',
         }}>
-          <VersePreviewBody state={state} />
+          <VersePreviewBody state={state} cited={cited} />
         </div>,
         document.body,
       )}
@@ -109,18 +135,25 @@ export function ScriptureRefLink({ scriptureRef, children }: { scriptureRef: Scr
   );
 }
 
-function VersePreviewBody({ state }: { state: PreviewState }) {
+function VersePreviewBody({ state, cited }: { state: PreviewState; cited?: ScriptureRef }) {
   if (state.status === 'loading') return <p style={{ margin: 0, color: 'var(--ink-mid)' }}>Loading…</p>;
   if (state.status === 'error' || !state.preview) return <p style={{ margin: 0, color: 'var(--ink-mid)' }}>Verse not available.</p>;
   const { label, english, originals } = state.preview;
   const labelStyle: CSSProperties = { fontSize: 'var(--fs-control)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-light)' };
   return (
     <>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>
+        {label}
+        {cited && (
+          <span style={{ fontWeight: 400, color: 'var(--ink-mid)' }}>
+            {' · cited as '}{cited.chapter}:{cited.verse}{BOOK_BY_ID.get(cited.bookId)?.testament === 'OT' && ' (Hebrew)'}
+          </span>
+        )}
+      </div>
       {english && <p style={{ margin: '0 0 8px' }}><span style={labelStyle}>NASB</span> {english}</p>}
       {originals.map((section) => (
         <div key={section.corpus} style={{ borderTop: '1px solid var(--border)', padding: '6px 0 2px' }}>
-          <div style={labelStyle}>{SECTION_LABEL[section.corpus] ?? section.corpus}</div>
+          <div style={labelStyle}>{SECTION_LABEL[section.corpus] ?? section.corpus}{section.sourceRef && ` · ${section.sourceRef}`}</div>
           <p
             dir={section.lang === 'Heb' ? 'rtl' : 'ltr'}
             style={{ margin: '2px 0 0', fontFamily: 'serif', fontSize: 'var(--fs-body)', color: section.lang === 'Heb' ? 'var(--amber)' : 'var(--indigo)' }}
